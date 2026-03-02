@@ -1,0 +1,206 @@
+@page "/tests"
+@inject IHealthTestService HealthTestService
+@inject ITenantService TenantService
+@inject ITestExecutionService ExecutionService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Tests de Salud - DHM</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">
+    <MudIcon Icon="@Icons.Material.Filled.Science" Class="mr-2" />
+    Tests de Salud
+</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Configura y gestiona los tests de integridad de datos
+</MudText>
+
+<MudStack Row="true" Class="mb-4" Spacing="2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        Nuevo Test
+    </MudButton>
+    <MudSelect T="Guid?" Value="_selectedTenantId" Label="Filtrar por Tenant"
+               Variant="Variant.Outlined" Dense="true" Style="min-width: 250px;"
+               Clearable="true" ValueChanged="@(async (Guid? v) => { _selectedTenantId = v; await LoadTestsAsync(); })">
+        @foreach (var tenant in _tenants)
+        {
+            <MudSelectItem T="Guid?" Value="@tenant.Id">@tenant.Name</MudSelectItem>
+        }
+    </MudSelect>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="@_tests" Hover="true" Elevation="2" Dense="true" Striped="true"
+              Style="border-radius: 12px;">
+        <HeaderContent>
+            <MudTh>Nombre</MudTh>
+            <MudTh>Tenant</MudTh>
+            <MudTh>Tipo Esperado</MudTh>
+            <MudTh>Frecuencia</MudTh>
+            <MudTh>Self-Heal</MudTh>
+            <MudTh>Activo</MudTh>
+            <MudTh>Acciones</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nombre">
+                <MudText Typo="Typo.body1"><b>@context.Name</b></MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+            </MudTd>
+            <MudTd DataLabel="Tenant">
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary">@context.TenantName</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Tipo">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.ExpectedResultType</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Frecuencia">@FormatFrequency(context.FrequencySeconds)</MudTd>
+            <MudTd DataLabel="Self-Heal">
+                @if (!string.IsNullOrEmpty(context.RemediationSql))
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Color="Color.Default" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Activo">
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Sí" : "No")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small"
+                               OnClick="@(() => RunTest(context))" Title="Ejecutar Ahora" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" Title="Editar" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => DeleteTest(context))" Title="Eliminar" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4">No hay tests configurados</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private List<HealthTestDto> _tests = new();
+    private List<TenantDto> _tenants = new();
+    private Guid? _selectedTenantId;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tenants = (await TenantService.GetAllAsync()).ToList();
+        await LoadTestsAsync();
+    }
+
+    private async Task LoadTestsAsync()
+    {
+        _loading = true;
+        if (_selectedTenantId.HasValue)
+            _tests = (await HealthTestService.GetByTenantIdAsync(_selectedTenantId.Value)).ToList();
+        else
+            _tests = (await HealthTestService.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<TestFormDialog>
+        {
+            { x => x.Test, new HealthTestDto { FrequencySeconds = 60 } },
+            { x => x.Tenants, _tenants },
+            { x => x.IsNew, true }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TestFormDialog>("Nuevo Test", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTestsAsync();
+            Snackbar.Add("Test creado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(HealthTestDto test)
+    {
+        var editTest = new HealthTestDto
+        {
+            Id = test.Id, TenantId = test.TenantId, Name = test.Name,
+            Description = test.Description, SqlQuery = test.SqlQuery,
+            ExpectedResultType = test.ExpectedResultType, ExpectedValue = test.ExpectedValue,
+            RemediationSql = test.RemediationSql, FrequencySeconds = test.FrequencySeconds,
+            IsActive = test.IsActive
+        };
+
+        var parameters = new DialogParameters<TestFormDialog>
+        {
+            { x => x.Test, editTest },
+            { x => x.Tenants, _tenants },
+            { x => x.IsNew, false }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TestFormDialog>("Editar Test", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTestsAsync();
+            Snackbar.Add("Test actualizado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteTest(HealthTestDto test)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"¿Seguro que deseas eliminar el test '{test.Name}'?" }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await HealthTestService.DeleteAsync(test.Id);
+            await LoadTestsAsync();
+            Snackbar.Add("Test eliminado", Severity.Warning);
+        }
+    }
+
+    private async Task RunTest(HealthTestDto test)
+    {
+        try
+        {
+            Snackbar.Add($"Ejecutando test '{test.Name}'...", Severity.Info);
+            var log = await ExecutionService.ExecuteTestAsync(test.Id);
+            if (log.Passed)
+                Snackbar.Add($"Test '{test.Name}' PASÓ - {log.ResultValue}", Severity.Success);
+            else
+                Snackbar.Add($"Test '{test.Name}' FALLÓ - {log.ErrorMessage ?? log.ResultValue}", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string FormatFrequency(int seconds)
+    {
+        if (seconds < 60) return $"{seconds}s";
+        if (seconds < 3600) return $"{seconds / 60}min";
+        return $"{seconds / 3600}h";
+    }
+}

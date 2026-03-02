@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DHM.Application/DHM.Application.csproj" />
+    <Project Path="src/DHM.Domain/DHM.Domain.csproj" />
+    <Project Path="src/DHM.Infrastructure/DHM.Infrastructure.csproj" />
+    <Project Path="src/DHM.Web/DHM.Web.csproj" />
+  </Folder>
+</Solution>

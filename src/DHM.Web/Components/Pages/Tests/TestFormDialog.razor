@@ -1,0 +1,111 @@
+@inject IHealthTestService HealthTestService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudSelect @bind-Value="Test.TenantId" Label="Tenant" Required="true"
+                       RequiredError="Selecciona un tenant" Variant="Variant.Outlined" Class="mb-3">
+                @foreach (var tenant in Tenants)
+                {
+                    <MudSelectItem Value="@tenant.Id">@tenant.Name (@tenant.DatabaseProvider)</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="Test.Name" Label="Nombre del Test" Required="true"
+                          RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudTextField @bind-Value="Test.Description" Label="Descripción" Variant="Variant.Outlined"
+                          Lines="2" Class="mb-3" />
+
+            <MudTextField @bind-Value="Test.SqlQuery" Label="Sentencia SQL de Consulta" Required="true"
+                          RequiredError="La query SQL es requerida" Variant="Variant.Outlined"
+                          Lines="4" Class="mb-3" Placeholder="SELECT COUNT(*) FROM MiTabla WHERE ..."
+                          HelperText="Query que se ejecutará contra la BD del tenant para evaluar la salud" />
+
+            <MudSelect @bind-Value="Test.ExpectedResultType" Label="Tipo de Resultado Esperado"
+                       Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem Value="ExpectedResultType.Exists">Existencia (que retorne filas)</MudSelectItem>
+                <MudSelectItem Value="ExpectedResultType.Count">Conteo (valor numérico exacto)</MudSelectItem>
+                <MudSelectItem Value="ExpectedResultType.UniqueValue">Valor Único (texto exacto)</MudSelectItem>
+                <MudSelectItem Value="ExpectedResultType.List">Lista (al menos 1 fila)</MudSelectItem>
+            </MudSelect>
+
+            @if (Test.ExpectedResultType is ExpectedResultType.Count or ExpectedResultType.UniqueValue)
+            {
+                <MudTextField @bind-Value="Test.ExpectedValue" Label="Valor Esperado"
+                              Variant="Variant.Outlined" Class="mb-3"
+                              HelperText="@(Test.ExpectedResultType == ExpectedResultType.Count ? "Número esperado (ej: 0, 100)" : "Texto exacto esperado")" />
+            }
+
+            <MudNumericField @bind-Value="Test.FrequencySeconds" Label="Frecuencia (segundos)"
+                             Variant="Variant.Outlined" Min="10" Max="86400" Class="mb-3"
+                             HelperText="Cada cuántos segundos se ejecuta el test (mín 10s)" />
+
+            <MudExpansionPanels Class="mb-3">
+                <MudExpansionPanel Text="Remediación Automática (Self-Healing)" Dense="true"
+                                   Icon="@Icons.Material.Filled.AutoFixHigh">
+                    <MudTextField @bind-Value="Test.RemediationSql" Label="SQL de Remediación"
+                                  Variant="Variant.Outlined" Lines="4"
+                                  Placeholder="UPDATE MiTabla SET Estado = 'Activo' WHERE ..."
+                                  HelperText="Sentencia SQL que se ejecutará automáticamente si el test FALLA" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            <MudSwitch @bind-Value="Test.IsActive" Color="Color.Success" Label="Activo" />
+
+            @if (!string.IsNullOrEmpty(_errorText))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3">@_errorText</MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit"
+                   Disabled="@(!_formValid || _saving)">
+            @if (_saving) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
+            @(IsNew ? "Crear" : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public HealthTestDto Test { get; set; } = new();
+    [Parameter] public List<TenantDto> Tenants { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; } = true;
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _saving;
+    private string _errorText = string.Empty;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formValid) return;
+
+        _saving = true;
+        _errorText = string.Empty;
+
+        try
+        {
+            if (IsNew)
+                await HealthTestService.CreateAsync(Test);
+            else
+                await HealthTestService.UpdateAsync(Test);
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _errorText = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

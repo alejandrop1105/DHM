@@ -1,0 +1,81 @@
+@inject ITenantService TenantService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="Tenant.Name" Label="Nombre del Tenant" Required="true"
+                          RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudSelect @bind-Value="Tenant.DatabaseProvider" Label="Proveedor de Base de Datos"
+                       Variant="Variant.Outlined" Class="mb-3" Required="true">
+                <MudSelectItem Value="DatabaseProvider.SqlServer">SQL Server</MudSelectItem>
+                <MudSelectItem Value="DatabaseProvider.PostgreSql">PostgreSQL</MudSelectItem>
+                <MudSelectItem Value="DatabaseProvider.MySql">MySQL / MariaDB</MudSelectItem>
+                <MudSelectItem Value="DatabaseProvider.Sqlite">SQLite</MudSelectItem>
+                <MudSelectItem Value="DatabaseProvider.Generic">Otra BD Relacional (Genérica)</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="Tenant.ConnectionString" Label="Connection String"
+                          Required="true" RequiredError="La connection string es requerida"
+                          Variant="Variant.Outlined" Lines="3" Class="mb-3"
+                          HelperText="Ej: Server=localhost;Database=MiDB;User Id=sa;Password=***;" />
+
+            <MudSwitch @bind-Value="Tenant.IsActive" Color="Color.Success" Label="Activo" Class="mb-3" />
+
+            @if (!string.IsNullOrEmpty(_helperText))
+            {
+                <MudAlert Severity="@_helperSeverity" Class="mt-2">@_helperText</MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit"
+                   Disabled="@(!_formValid || _saving)">
+            @if (_saving) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
+            @(IsNew ? "Crear" : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public TenantDto Tenant { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; } = true;
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _saving;
+    private string _helperText = string.Empty;
+    private Severity _helperSeverity = Severity.Info;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formValid) return;
+
+        _saving = true;
+        _helperText = string.Empty;
+
+        try
+        {
+            if (IsNew)
+                await TenantService.CreateAsync(Tenant);
+            else
+                await TenantService.UpdateAsync(Tenant);
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _helperText = $"Error: {ex.Message}";
+            _helperSeverity = Severity.Error;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

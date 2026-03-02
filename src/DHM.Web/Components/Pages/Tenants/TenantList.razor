@@ -1,0 +1,168 @@
+@page "/tenants"
+@inject ITenantService TenantService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Tenants - DHM</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">
+    <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+    Gestión de Tenants
+</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Administra los clientes y sus bases de datos monitoreadas
+</MudText>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+           OnClick="OpenCreateDialog" Class="mb-4">
+    Nuevo Tenant
+</MudButton>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="@_tenants" Hover="true" Elevation="2" Dense="true" Striped="true"
+              Style="border-radius: 12px;">
+        <HeaderContent>
+            <MudTh>Nombre</MudTh>
+            <MudTh>Proveedor</MudTh>
+            <MudTh>Connection String</MudTh>
+            <MudTh>Activo</MudTh>
+            <MudTh>Creado</MudTh>
+            <MudTh>Acciones</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nombre">
+                <MudText Typo="Typo.body1"><b>@context.Name</b></MudText>
+            </MudTd>
+            <MudTd DataLabel="Proveedor">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.DatabaseProvider</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Connection String">
+                <MudText Typo="Typo.caption" Style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    @context.ConnectionString
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Activo">
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Sí" : "No")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Creado">@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Wifi" Color="Color.Info" Size="Size.Small"
+                               OnClick="@(() => TestConnection(context))" Title="Probar Conexión" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" Title="Editar" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => DeleteTenant(context))" Title="Eliminar" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4">No hay tenants registrados</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private List<TenantDto> _tenants = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTenantsAsync();
+    }
+
+    private async Task LoadTenantsAsync()
+    {
+        _loading = true;
+        _tenants = (await TenantService.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<TenantFormDialog>
+        {
+            { x => x.Tenant, new TenantDto() },
+            { x => x.IsNew, true }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TenantFormDialog>("Nuevo Tenant", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTenantsAsync();
+            Snackbar.Add("Tenant creado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(TenantDto tenant)
+    {
+        var parameters = new DialogParameters<TenantFormDialog>
+        {
+            { x => x.Tenant, new TenantDto
+                {
+                    Id = tenant.Id,
+                    Name = tenant.Name,
+                    ConnectionString = tenant.ConnectionString,
+                    DatabaseProvider = tenant.DatabaseProvider,
+                    IsActive = tenant.IsActive
+                }
+            },
+            { x => x.IsNew, false }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TenantFormDialog>("Editar Tenant", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadTenantsAsync();
+            Snackbar.Add("Tenant actualizado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteTenant(TenantDto tenant)
+    {
+        // Confirmación simple usando un diálogo estándar
+        var confirmed = await ConfirmDeleteAsync($"¿Seguro que deseas eliminar el tenant '{tenant.Name}'?");
+        if (confirmed)
+        {
+            await TenantService.DeleteAsync(tenant.Id);
+            await LoadTenantsAsync();
+            Snackbar.Add("Tenant eliminado", Severity.Warning);
+        }
+    }
+
+    private async Task<bool> ConfirmDeleteAsync(string message)
+    {
+        var parameters = new DialogParameters<ConfirmDialog> { { x => x.Message, message } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters, options);
+        var result = await dialog.Result;
+        return result is not null && !result.Canceled;
+    }
+
+    private async Task TestConnection(TenantDto tenant)
+    {
+        try
+        {
+            var success = await TenantService.TestConnectionAsync(tenant.Id);
+            if (success)
+                Snackbar.Add($"Conexión exitosa a '{tenant.Name}'", Severity.Success);
+            else
+                Snackbar.Add($"No se pudo conectar a '{tenant.Name}'", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,25 @@
+﻿@using MudBlazor
+
+<MudNavMenu>
+    <MudText Typo="Typo.caption" Class="px-4 mt-4 mb-2 mud-text-secondary">MONITOREO</MudText>
+    <MudNavLink Href="/" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 mt-4 mb-2 mud-text-secondary">GESTIÓN</MudText>
+    <MudNavLink Href="/tenants"
+                Icon="@Icons.Material.Filled.Business">
+        Tenants
+    </MudNavLink>
+    <MudNavLink Href="/tests"
+                Icon="@Icons.Material.Filled.Science">
+        Tests
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 mt-4 mb-2 mud-text-secondary">ANÁLISIS</MudText>
+    <MudNavLink Href="/analytics"
+                Icon="@Icons.Material.Filled.TrendingUp">
+        Tendencias
+    </MudNavLink>
+</MudNavMenu>

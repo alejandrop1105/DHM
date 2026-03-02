@@ -1,0 +1,13 @@
+﻿D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(7,17): error CS0234: El tipo o el nombre del espacio de nombres 'Extensions' no existe en el espacio de nombres 'Microsoft' (┬┐falta alguna referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(17,22): error CS0246: El nombre del tipo o del espacio de nombres 'ILogger<>' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(24,9): error CS0246: El nombre del tipo o del espacio de nombres 'ILogger<>' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+
+ERROR al compilar.
+
+D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(7,17): error CS0234: El tipo o el nombre del espacio de nombres 'Extensions' no existe en el espacio de nombres 'Microsoft' (┬┐falta alguna referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(17,22): error CS0246: El nombre del tipo o del espacio de nombres 'ILogger<>' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\Services\TestExecutionService.cs(24,9): error CS0246: El nombre del tipo o del espacio de nombres 'ILogger<>' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\DESARROLLO\ANTIGRAVITY\DHM\src\DHM.Application\DHM.Application.csproj]
+    0 Advertencia(s)
+    3 Errores
+
+Tiempo transcurrido 00:00:02.39
