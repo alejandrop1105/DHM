@@ -37,6 +37,44 @@ public class DatabaseInitializer
                 UpdatedAt TEXT
             )");
 
+        // Tabla de grupos de Tags
+        await connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS TagGroups (
+                Id TEXT PRIMARY KEY,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL DEFAULT '#594AE2',
+                SortOrder INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL
+            )");
+
+        // Tabla de Tags
+        await connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS Tags (
+                Id TEXT PRIMARY KEY,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL,
+                GroupId TEXT,
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (GroupId) REFERENCES TagGroups(Id) ON DELETE SET NULL
+            )");
+
+        // Migración: agregar GroupId si no existe (bases de datos existentes)
+        try
+        {
+            await connection.ExecuteAsync("ALTER TABLE Tags ADD COLUMN GroupId TEXT");
+        }
+        catch { /* columna ya existe */ }
+
+        // Tabla intermedia TenantTags
+        await connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS TenantTags (
+                TenantId TEXT NOT NULL,
+                TagId TEXT NOT NULL,
+                PRIMARY KEY (TenantId, TagId),
+                FOREIGN KEY (TenantId) REFERENCES Tenants(Id) ON DELETE CASCADE,
+                FOREIGN KEY (TagId) REFERENCES Tags(Id) ON DELETE CASCADE
+            )");
+
         // Tabla de HealthTests
         await connection.ExecuteAsync(@"
             CREATE TABLE IF NOT EXISTS HealthTests (

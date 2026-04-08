@@ -1,0 +1,49 @@
+@using DHM.Application.DTOs
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="Group.Name" Label="Nombre del Grupo"
+                          Required="true" RequiredError="El nombre es requerido"
+                          Variant="Variant.Outlined" Class="mb-4" />
+
+            <MudText Typo="Typo.body2" Class="mb-2">Color del Grupo</MudText>
+            <MudColorPicker Label="Color" @bind-Text="Group.Color"
+                            Variant="Variant.Outlined" DisableToolbar="false" />
+
+            <MudNumericField @bind-Value="Group.SortOrder" Label="Orden de visualización"
+                             Variant="Variant.Outlined" Class="mt-4" Min="0" />
+
+            <div class="mt-4 d-flex align-center gap-2">
+                <MudText Typo="Typo.body2">Vista Previa:</MudText>
+                <MudChip T="string" Style="@($"background-color: {Group.Color}; color: white; font-weight: bold;")">
+                    @(string.IsNullOrEmpty(Group.Name) ? "Nombre del Grupo" : Group.Name)
+                </MudChip>
+            </div>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="!_formValid">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TagGroupDto Group { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+
+    private MudForm _form = default!;
+    private bool _formValid;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (_formValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Group));
+        }
+    }
+}

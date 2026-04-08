@@ -1,0 +1,232 @@
+@page "/tags"
+@using DHM.Application.DTOs
+@using DHM.Application.Interfaces
+@inject ITagService TagService
+@inject ITagGroupService TagGroupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Etiquetas - DHM</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">
+    <MudIcon Icon="@Icons.Material.Filled.Label" Class="mr-2" />
+    Gestión de Etiquetas
+</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Administra los grupos y etiquetas para clasificar tus tenants
+</MudText>
+
+<div class="d-flex gap-3 mb-4">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateTagDialog">
+        Nueva Etiqueta
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+               StartIcon="@Icons.Material.Filled.CreateNewFolder" OnClick="OpenCreateGroupDialog">
+        Nuevo Grupo
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (!_groups.Any())
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        No hay grupos creados. Creá un grupo primero para poder agregar etiquetas.
+    </MudAlert>
+}
+else
+{
+    @foreach (var group in _groups.OrderBy(g => g.SortOrder).ThenBy(g => g.Name))
+    {
+        var tagsInGroup = _tags.Where(t => t.GroupId == group.Id).OrderBy(t => t.Name).ToList();
+
+        <MudPaper Elevation="2" Class="mb-4" Style="border-radius: 12px; overflow: hidden;">
+            <!-- Cabecera del grupo -->
+            <div style="background-color: @group.Color; padding: 12px 20px;" class="d-flex justify-space-between align-center">
+                <div class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Folder" Style="color: white;" />
+                    <MudText Typo="Typo.h6" Style="color: white; font-weight: 600;">@group.Name</MudText>
+                    <MudChip T="string" Size="Size.Small" Style="background-color: rgba(255,255,255,0.25); color: white;">
+                        @tagsInGroup.Count etiqueta@(tagsInGroup.Count != 1 ? "s" : "")
+                    </MudChip>
+                </div>
+                <div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Style="color: white;" Size="Size.Small"
+                                   OnClick="@(() => OpenEditGroupDialog(group))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Style="color: white;" Size="Size.Small"
+                                   OnClick="@(() => DeleteGroup(group))" />
+                </div>
+            </div>
+
+            <!-- Etiquetas del grupo -->
+            <div class="pa-3">
+                @if (!tagsInGroup.Any())
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2">
+                        Sin etiquetas en este grupo. Creá una nueva etiqueta y asignala aquí.
+                    </MudText>
+                }
+                else
+                {
+                    <MudTable Items="@tagsInGroup" Hover="true" Dense="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>Nombre</MudTh>
+                            <MudTh>Vista Previa</MudTh>
+                            <MudTh>Color (Hex)</MudTh>
+                            <MudTh>Acciones</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Nombre">@context.Name</MudTd>
+                            <MudTd DataLabel="Vista Previa">
+                                <MudChip T="string" Style="@($"background-color: {context.Color}; color: white;")">@context.Name</MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Color (Hex)"><code>@context.Color</code></MudTd>
+                            <MudTd>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="@(() => OpenEditTagDialog(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => DeleteTag(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    private List<TagDto> _tags = new();
+    private List<TagGroupDto> _groups = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _groups = (await TagGroupService.GetAllAsync()).ToList();
+        _tags = (await TagService.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+    // ── GRUPOS ──────────────────────────────────────────────────────────────
+
+    private async Task OpenCreateGroupDialog()
+    {
+        var parameters = new DialogParameters<TagGroupFormDialog>
+        {
+            { x => x.Group, new TagGroupDto() },
+            { x => x.IsNew, true }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagGroupFormDialog>("Nuevo Grupo", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var dto = (TagGroupDto)result.Data!;
+            await TagGroupService.CreateAsync(dto);
+            await LoadDataAsync();
+            Snackbar.Add("Grupo creado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditGroupDialog(TagGroupDto group)
+    {
+        var parameters = new DialogParameters<TagGroupFormDialog>
+        {
+            { x => x.Group, new TagGroupDto { Id = group.Id, Name = group.Name, Color = group.Color, SortOrder = group.SortOrder } },
+            { x => x.IsNew, false }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagGroupFormDialog>("Editar Grupo", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var dto = (TagGroupDto)result.Data!;
+            await TagGroupService.UpdateAsync(dto);
+            await LoadDataAsync();
+            Snackbar.Add("Grupo actualizado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteGroup(TagGroupDto group)
+    {
+        var parameters = new DialogParameters<ConfirmDialog> { { x => x.Message, $"¿Seguro que deseas eliminar el grupo '{group.Name}'? Las etiquetas dentro quedarán sin grupo." } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await TagGroupService.DeleteAsync(group.Id);
+            await LoadDataAsync();
+            Snackbar.Add("Grupo eliminado", Severity.Warning);
+        }
+    }
+
+    // ── ETIQUETAS ────────────────────────────────────────────────────────────
+
+    private async Task OpenCreateTagDialog()
+    {
+        var parameters = new DialogParameters<TagFormDialog>
+        {
+            { x => x.Tag, new TagDto() },
+            { x => x.IsNew, true }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagFormDialog>("Nueva Etiqueta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var dto = (TagDto)result.Data!;
+            await TagService.CreateAsync(dto);
+            await LoadDataAsync();
+            Snackbar.Add("Etiqueta creada exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditTagDialog(TagDto tag)
+    {
+        var parameters = new DialogParameters<TagFormDialog>
+        {
+            { x => x.Tag, new TagDto { Id = tag.Id, Name = tag.Name, Color = tag.Color, GroupId = tag.GroupId } },
+            { x => x.IsNew, false }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<TagFormDialog>("Editar Etiqueta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var dto = (TagDto)result.Data!;
+            await TagService.UpdateAsync(dto);
+            await LoadDataAsync();
+            Snackbar.Add("Etiqueta actualizada exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteTag(TagDto tag)
+    {
+        var parameters = new DialogParameters<ConfirmDialog> { { x => x.Message, $"¿Seguro que deseas eliminar la etiqueta '{tag.Name}'?" } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await TagService.DeleteAsync(tag.Id);
+            await LoadDataAsync();
+            Snackbar.Add("Etiqueta eliminada", Severity.Warning);
+        }
+    }
+}

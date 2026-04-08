@@ -11,6 +11,7 @@ public class TenantDto
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<TagDto> Tags { get; set; } = new();
 
     // Datos calculados para dashboard
     public int TotalTests { get; set; }

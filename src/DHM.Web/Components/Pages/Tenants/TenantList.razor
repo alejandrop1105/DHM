@@ -1,5 +1,8 @@
 @page "/tenants"
+@using DHM.Application.DTOs
+@using DHM.Application.Interfaces
 @inject ITenantService TenantService
+@inject ITagService TagService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -13,11 +16,47 @@
     Administra los clientes y sus bases de datos monitoreadas
 </MudText>
 
-<div class="d-flex align-center mb-4">
+<MudPaper Elevation="0" Class="pa-4 mb-4 d-flex flex-wrap align-center gap-4" Style="background-color: transparent;">
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenCreateDialog" Class="mr-2">
+               OnClick="OpenCreateDialog">
         Nuevo Tenant
     </MudButton>
+
+    <MudSpacer />
+
+    <MudToggleGroup T="ViewMode" @bind-Value="_currentView" Outline="true" Delimiters="true" Dense="true" CheckMark="false" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary">
+        <MudToggleItem Value="@ViewMode.Table" UnselectedIcon="@Icons.Material.Outlined.TableRows" SelectedIcon="@Icons.Material.Filled.TableRows" />
+        <MudToggleItem Value="@ViewMode.Cards" UnselectedIcon="@Icons.Material.Outlined.GridView" SelectedIcon="@Icons.Material.Filled.GridView" />
+    </MudToggleGroup>
+
+    @if (_currentView == ViewMode.Cards)
+    {
+        <MudToggleGroup T="CardSize" @bind-Value="_cardSize" Outline="true" Delimiters="true" Dense="true" CheckMark="false" SelectionMode="SelectionMode.SingleSelection" Color="Color.Secondary">
+            <MudToggleItem Value="@CardSize.Small" UnselectedIcon="@Icons.Material.Outlined.ViewModule" SelectedIcon="@Icons.Material.Filled.ViewModule" Title="Pequeño" />
+            <MudToggleItem Value="@CardSize.Medium" UnselectedIcon="@Icons.Material.Outlined.ViewComfy" SelectedIcon="@Icons.Material.Filled.ViewComfy" Title="Mediano" />
+            <MudToggleItem Value="@CardSize.Large" UnselectedIcon="@Icons.Material.Outlined.ViewQuilt" SelectedIcon="@Icons.Material.Filled.ViewQuilt" Title="Grande" />
+        </MudToggleGroup>
+    }
+
+    <MudSelect T="TagDto" Label="Filtrar por Etiquetas" MultiSelection="true" @bind-SelectedValues="_selectedFilterTags"
+               Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="flex-grow-0" Style="min-width: 250px;"
+               ToStringFunc="@(t => t?.Name)" Clearable="true" Dense="true">
+        @foreach (var group in _availableTags.GroupBy(t => t.GroupName).OrderBy(g => g.Key))
+        {
+            <MudSelectItem T="TagDto" Disabled="true" Class="mud-text-secondary mt-1 mb-1">
+                <b>@(string.IsNullOrEmpty(group.Key) ? "Sin grupo" : group.Key)</b>
+            </MudSelectItem>
+            @foreach (var tag in group.OrderBy(t => t.Name))
+            {
+                <MudSelectItem T="TagDto" Value="@tag">
+                    <div class="d-flex align-center pl-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Label" Style="@($"color: {tag.Color};")" Size="Size.Small" Class="mr-2" />
+                        @tag.Name
+                    </div>
+                </MudSelectItem>
+            }
+        }
+    </MudSelect>
 
     @if (_selectedTenants.Any())
     {
@@ -26,7 +65,7 @@
             Eliminar seleccionados (@_selectedTenants.Count)
         </MudButton>
     }
-</div>
+</MudPaper>
 
 @if (_loading)
 {
@@ -34,58 +73,154 @@
 }
 else
 {
-    <MudTable Items="@_tenants" Hover="true" Elevation="2" Dense="true" Striped="true"
-              MultiSelection="true" @bind-SelectedItems="_selectedTenants"
-              Style="border-radius: 12px;">
-        <HeaderContent>
-            <MudTh>Nombre</MudTh>
-            <MudTh>Proveedor</MudTh>
-            <MudTh>Connection String</MudTh>
-            <MudTh>Activo</MudTh>
-            <MudTh>Creado</MudTh>
-            <MudTh>Acciones</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Nombre">
-                <MudText Typo="Typo.body1"><b>@context.Name</b></MudText>
-            </MudTd>
-            <MudTd DataLabel="Proveedor">
-                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.DatabaseProvider</MudChip>
-            </MudTd>
-            <MudTd DataLabel="Connection String">
-                <MudText Typo="Typo.caption" Style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    @context.ConnectionString
-                </MudText>
-            </MudTd>
-            <MudTd DataLabel="Activo">
-                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
-                    @(context.IsActive ? "Sí" : "No")
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Creado">@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
-            <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Wifi" Color="Color.Info" Size="Size.Small"
-                               OnClick="@(() => TestConnection(context))" Title="Probar Conexión" />
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
-                               OnClick="@(() => OpenEditDialog(context))" Title="Editar" />
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                               OnClick="@(() => DeleteTenant(context))" Title="Eliminar" />
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText Align="Align.Center" Class="pa-4">No hay tenants registrados</MudText>
-        </NoRecordsContent>
-    </MudTable>
+    @if (_currentView == ViewMode.Table)
+    {
+        <MudTable Items="@FilteredTenants" Hover="true" Elevation="2" Dense="true" Striped="true"
+                  MultiSelection="true" @bind-SelectedItems="_selectedTenants"
+                  Style="border-radius: 12px;">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Etiquetas</MudTh>
+                <MudTh>Proveedor</MudTh>
+                <MudTh>Activo</MudTh>
+                <MudTh>Creado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">
+                    <MudText Typo="Typo.body1"><b>@context.Name</b></MudText>
+                </MudTd>
+                <MudTd DataLabel="Etiquetas">
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var tag in context.Tags)
+                        {
+                            <MudChip T="string" Size="Size.Small" Style="@($"background-color: {tag.Color}; color: white; font-size: 10px; height: 18px;")">
+                                @tag.Name
+                            </MudChip>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Proveedor">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.DatabaseProvider</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Activo">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                        @(context.IsActive ? "Sí" : "No")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Creado">@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Wifi" Color="Color.Info" Size="Size.Small"
+                                   OnClick="@(() => TestConnection(context))" Title="Probar Conexión" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialog(context))" Title="Editar" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => DeleteTenant(context))" Title="Eliminar" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Align="Align.Center" Class="pa-4">No se encontraron tenants con los criterios seleccionados</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            @if (!FilteredTenants.Any())
+            {
+                <MudItem xs="12">
+                    <MudText Align="Align.Center" Class="pa-4">No se encontraron tenants con los criterios seleccionados</MudText>
+                </MudItem>
+            }
+            else
+            {
+                @foreach (var tenant in FilteredTenants)
+                {
+                    <MudItem xs="@(GetGridSize(_cardSize, "xs"))" 
+                             sm="@(GetGridSize(_cardSize, "sm"))" 
+                             md="@(GetGridSize(_cardSize, "md"))" 
+                             lg="@(GetGridSize(_cardSize, "lg"))">
+                        <MudCard Elevation="2" Style="border-radius: 12px; height: 100%;" Class="d-flex flex-column">
+                            <MudCardContent Class="@($"flex-grow-1 {(_cardSize == CardSize.Small ? "pa-2" : "pa-4")}")">
+                                <div class="d-flex justify-space-between align-start mb-2">
+                                    <MudText Typo="@(_cardSize == CardSize.Small ? Typo.body1 : Typo.h6)" Class="flex-grow-1" Style="word-break: break-all;">@tenant.Name</MudText>
+                                    <span style="font-size: 18px; color: @(tenant.IsActive ? "#4caf50" : "#9e9e9e"); line-height: 1; flex-shrink: 0;" title="@(tenant.IsActive ? "Activo" : "Inactivo")">●</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    @foreach (var tag in tenant.Tags)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Style="@($"background-color: {tag.Color}; color: white; border-radius: 4px; font-size: {(_cardSize == CardSize.Small ? "9px" : "11px")};")">
+                                            @tag.Name
+                                        </MudChip>
+                                    }
+                                </div>
+                                @if (_cardSize != CardSize.Small)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@tenant.DatabaseProvider</MudText>
+                                }
+                            </MudCardContent>
+                            <MudCardActions Class="d-flex justify-end gap-1 pa-2">
+                                <MudIconButton Icon="@Icons.Material.Filled.Wifi" Color="Color.Info" Size="Size.Small"
+                                               OnClick="@(() => TestConnection(tenant))" Title="Probar Conexión" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="@(() => OpenEditDialog(tenant))" Title="Editar" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => DeleteTenant(tenant))" Title="Eliminar" />
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            }
+        </MudGrid>
+    }
 }
 
 @code {
+    private enum ViewMode { Table, Cards }
+    private enum CardSize { Small, Medium, Large }
+    
+    private ViewMode _currentView = ViewMode.Table;
+    private CardSize _cardSize = CardSize.Medium;
+
     private List<TenantDto> _tenants = new();
     private HashSet<TenantDto> _selectedTenants = new();
     private bool _loading = true;
 
+    private List<TagDto> _availableTags = new();
+    private IReadOnlyCollection<TagDto> _selectedFilterTags = new HashSet<TagDto>();
+
+    private IEnumerable<TenantDto> FilteredTenants => 
+        _selectedFilterTags == null || !_selectedFilterTags.Any() 
+            ? _tenants 
+            : _tenants.Where(t => t.Tags != null && t.Tags.Any(tag => _selectedFilterTags.Any(ft => ft.Id == tag.Id)));
+
     protected override async Task OnInitializedAsync()
     {
         await LoadTenantsAsync();
+        await LoadTagsAsync();
+    }
+
+    private int GetGridSize(CardSize size, string breakpoint)
+    {
+        return (size, breakpoint) switch
+        {
+            (CardSize.Small, "xs") => 6,
+            (CardSize.Small, "sm") => 4,
+            (CardSize.Small, "md") => 3,
+            (CardSize.Small, "lg") => 2,
+            
+            (CardSize.Medium, "xs") => 12,
+            (CardSize.Medium, "sm") => 6,
+            (CardSize.Medium, "md") => 4,
+            (CardSize.Medium, "lg") => 3,
+            
+            (CardSize.Large, "xs") => 12,
+            (CardSize.Large, "sm") => 12,
+            (CardSize.Large, "md") => 6,
+            (CardSize.Large, "lg") => 4,
+            
+            _ => 12
+        };
     }
 
     private async Task LoadTenantsAsync()
@@ -94,6 +229,11 @@ else
         _tenants = (await TenantService.GetAllAsync()).ToList();
         _selectedTenants.Clear();
         _loading = false;
+    }
+
+    private async Task LoadTagsAsync()
+    {
+        _availableTags = (await TagService.GetAllAsync()).ToList();
     }
 
     private async Task DeleteSelectedTenants()
@@ -139,17 +279,11 @@ else
 
     private async Task OpenEditDialog(TenantDto tenant)
     {
+        var tenantToEdit = await TenantService.GetByIdAsync(tenant.Id);
+        
         var parameters = new DialogParameters<TenantFormDialog>
         {
-            { x => x.Tenant, new TenantDto
-                {
-                    Id = tenant.Id,
-                    Name = tenant.Name,
-                    ConnectionString = tenant.ConnectionString,
-                    DatabaseProvider = tenant.DatabaseProvider,
-                    IsActive = tenant.IsActive
-                }
-            },
+            { x => x.Tenant, tenantToEdit },
             { x => x.IsNew, false }
         };
 
@@ -166,7 +300,6 @@ else
 
     private async Task DeleteTenant(TenantDto tenant)
     {
-        // Confirmación simple usando un diálogo estándar
         var confirmed = await ConfirmDeleteAsync($"¿Seguro que deseas eliminar el tenant '{tenant.Name}'?");
         if (confirmed)
         {

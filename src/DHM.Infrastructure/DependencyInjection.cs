@@ -24,6 +24,8 @@ public static class DependencyInjection
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IHealthTestRepository, HealthTestRepository>();
         services.AddScoped<IExecutionLogRepository, ExecutionLogRepository>();
+        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<ITagGroupRepository, TagGroupRepository>();
 
         // Servicios de infraestructura
         services.AddScoped<IExternalDatabaseService, ExternalDatabaseService>();
@@ -33,6 +35,8 @@ public static class DependencyInjection
         services.AddScoped<IHealthTestService, HealthTestService>();
         services.AddScoped<ITestExecutionService, TestExecutionService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ITagService, TagService>();
+        services.AddScoped<ITagGroupService, TagGroupService>();
 
         return services;
     }

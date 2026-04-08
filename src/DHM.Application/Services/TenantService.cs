@@ -9,23 +9,41 @@ public class TenantService : ITenantService
 {
     private readonly ITenantRepository _tenantRepository;
     private readonly IExternalDatabaseService _externalDbService;
+    private readonly ITagRepository _tagRepository;
 
-    public TenantService(ITenantRepository tenantRepository, IExternalDatabaseService externalDbService)
+    public TenantService(ITenantRepository tenantRepository, IExternalDatabaseService externalDbService, ITagRepository tagRepository)
     {
         _tenantRepository = tenantRepository;
         _externalDbService = externalDbService;
+        _tagRepository = tagRepository;
     }
 
     public async Task<IEnumerable<TenantDto>> GetAllAsync()
     {
         var tenants = await _tenantRepository.GetAllAsync();
-        return tenants.Select(MapToDto);
+        var dtos = new List<TenantDto>();
+        
+        foreach (var tenant in tenants)
+        {
+            var dto = MapToDto(tenant);
+            var tags = await _tagRepository.GetByTenantIdAsync(tenant.Id);
+            dto.Tags = tags.Select(t => new TagDto { Id = t.Id, Name = t.Name, Color = t.Color }).ToList();
+            dtos.Add(dto);
+        }
+        
+        return dtos;
     }
 
     public async Task<TenantDto?> GetByIdAsync(Guid id)
     {
         var tenant = await _tenantRepository.GetByIdAsync(id);
-        return tenant is null ? null : MapToDto(tenant);
+        if (tenant is null) return null;
+        
+        var dto = MapToDto(tenant);
+        var tags = await _tagRepository.GetByTenantIdAsync(id);
+        dto.Tags = tags.Select(t => new TagDto { Id = t.Id, Name = t.Name, Color = t.Color }).ToList();
+        
+        return dto;
     }
 
     public async Task<Guid> CreateAsync(TenantDto dto)
@@ -39,7 +57,15 @@ public class TenantService : ITenantService
             IsActive = dto.IsActive,
             CreatedAt = DateTime.UtcNow
         };
-        return await _tenantRepository.CreateAsync(tenant);
+        
+        var id = await _tenantRepository.CreateAsync(tenant);
+        
+        if (dto.Tags != null && dto.Tags.Any())
+        {
+            await _tagRepository.AssignTagsToTenantAsync(id, dto.Tags.Select(t => t.Id));
+        }
+        
+        return id;
     }
 
     public async Task UpdateAsync(TenantDto dto)
@@ -54,6 +80,10 @@ public class TenantService : ITenantService
         tenant.UpdatedAt = DateTime.UtcNow;
 
         await _tenantRepository.UpdateAsync(tenant);
+        
+        // Sincronizar etiquetas
+        var tagIds = dto.Tags?.Select(t => t.Id) ?? Enumerable.Empty<Guid>();
+        await _tagRepository.AssignTagsToTenantAsync(dto.Id, tagIds);
     }
 
     public async Task DeleteAsync(Guid id)

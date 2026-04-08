@@ -1,4 +1,5 @@
 @inject ITenantService TenantService
+@inject ITagService TagService
 
 <MudDialog>
     <DialogContent>
@@ -49,6 +50,26 @@
             {
                 <MudTextField T="string" Value="_database" ValueChanged="OnDatabaseChanged" Label="Base de Datos" Variant="Variant.Outlined" Required="true" Margin="Margin.Dense" Class="mb-3" Disabled="_discovering" />
             }
+
+            <MudSelect T="TagDto" Label="Etiquetas para el/los Tenant(s)" MultiSelection="true" @bind-SelectedValues="_selectedTags"
+                       Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="mb-4"
+                       ToStringFunc="@(t => t?.Name)" Disabled="_discovering">
+                @foreach (var group in _availableTags.GroupBy(t => t.GroupName).OrderBy(g => g.Key))
+                {
+                    <MudSelectItem T="TagDto" Disabled="true" Class="mud-text-secondary mt-1 mb-1">
+                        <b>@(string.IsNullOrEmpty(group.Key) ? "Sin grupo" : group.Key)</b>
+                    </MudSelectItem>
+                    @foreach (var tag in group.OrderBy(t => t.Name))
+                    {
+                        <MudSelectItem T="TagDto" Value="@tag">
+                            <div class="d-flex align-center pl-3">
+                                <MudIcon Icon="@Icons.Material.Filled.Label" Style="@($"color: {tag.Color};")" Size="Size.Small" Class="mr-2" />
+                                @tag.Name
+                            </div>
+                        </MudSelectItem>
+                    }
+                }
+            </MudSelect>
 
             <MudTextField @bind-Value="Tenant.ConnectionString" Label="@(_isBulkMode ? "Connection String Generada" : "Connection String")"
                           Required="true" RequiredError="La connection string es requerida"
@@ -126,6 +147,19 @@
     private bool _isBulkMode;
     private string _helperText = string.Empty;
     private Severity _helperSeverity = Severity.Info;
+
+    private IReadOnlyCollection<TagDto> _selectedTags = new HashSet<TagDto>();
+    private List<TagDto> _availableTags = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _availableTags = (await TagService.GetAllAsync()).ToList();
+        
+        if (!IsNew && Tenant.Tags != null)
+        {
+            _selectedTags = new HashSet<TagDto>(_availableTags.Where(a => Tenant.Tags.Any(t => t.Id == a.Id)));
+        }
+    }
 
     private string _server = string.Empty;
     private string _port = string.Empty;
@@ -226,7 +260,8 @@
                         Name = string.IsNullOrWhiteSpace(db.CustomName) ? db.DbName : db.CustomName,
                         ConnectionString = BuildSpecificConnectionString(Tenant.ConnectionString, db.DbName),
                         DatabaseProvider = Tenant.DatabaseProvider,
-                        IsActive = true
+                        IsActive = true,
+                        Tags = _selectedTags.ToList()
                     });
                 }
 
@@ -234,6 +269,7 @@
             }
             else
             {
+                Tenant.Tags = _selectedTags.ToList();
                 if (IsNew)
                     await TenantService.CreateAsync(Tenant);
                 else
