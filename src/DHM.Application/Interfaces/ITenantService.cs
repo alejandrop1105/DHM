@@ -10,4 +10,7 @@ public interface ITenantService
     Task UpdateAsync(TenantDto dto);
     Task DeleteAsync(Guid id);
     Task<bool> TestConnectionAsync(Guid tenantId);
+    Task<IEnumerable<string>> DiscoverDatabasesAsync(string connectionString, Domain.Enums.DatabaseProvider provider);
+    Task CreateBulkAsync(IEnumerable<TenantDto> tenants);
+    Task DeleteBulkAsync(IEnumerable<Guid> ids);
 }

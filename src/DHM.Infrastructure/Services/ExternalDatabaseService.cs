@@ -67,4 +67,26 @@ public class ExternalDatabaseService : IExternalDatabaseService
             return false;
         }
     }
+
+    public async Task<IEnumerable<string>> GetDatabaseNamesAsync(string connectionString, DatabaseProvider provider)
+    {
+        try
+        {
+            if (provider != DatabaseProvider.SqlServer)
+                return Enumerable.Empty<string>();
+
+            using var connection = CreateConnection(connectionString, provider);
+            connection.Open();
+
+            // Query compatible con SQL Server 2005+ para listar bases de datos de usuario
+            const string sql = "SELECT name FROM sys.databases WHERE database_id > 4 AND state = 0 ORDER BY name";
+            var names = await connection.QueryAsync<string>(sql);
+            return names;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener nombres de BD de {Provider}", provider);
+            throw;
+        }
+    }
 }

@@ -69,6 +69,27 @@ public class TenantService : ITenantService
         return await _externalDbService.TestConnectionAsync(tenant.ConnectionString, tenant.DatabaseProvider);
     }
 
+    public async Task<IEnumerable<string>> DiscoverDatabasesAsync(string connectionString, Domain.Enums.DatabaseProvider provider)
+    {
+        return await _externalDbService.GetDatabaseNamesAsync(connectionString, provider);
+    }
+
+    public async Task CreateBulkAsync(IEnumerable<TenantDto> tenants)
+    {
+        foreach (var dto in tenants)
+        {
+            await CreateAsync(dto);
+        }
+    }
+
+    public async Task DeleteBulkAsync(IEnumerable<Guid> ids)
+    {
+        foreach (var id in ids)
+        {
+            await DeleteAsync(id);
+        }
+    }
+
     private static TenantDto MapToDto(Tenant tenant) => new()
     {
         Id = tenant.Id,

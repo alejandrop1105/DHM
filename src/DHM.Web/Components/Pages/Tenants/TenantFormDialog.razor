@@ -2,38 +2,114 @@
 
 <MudDialog>
     <DialogContent>
+        <MudOverlay Visible="_discovering" DarkBackground="true" Absolute="true" ZIndex="9999">
+            <div class="d-flex flex-column align-center">
+                <MudProgressCircular Color="Color.Info" Indeterminate="true" Size="Size.Large" />
+                <MudText Typo="Typo.h6" Color="Color.Info" Class="mt-4">Verificando conexión al motor...</MudText>
+            </div>
+        </MudOverlay>
+
+        @if (_discovering)
+        {
+            <MudProgressLinear Color="Color.Info" Indeterminate="true" Class="mb-2" />
+        }
         <MudForm @ref="_form" @bind-IsValid="_formValid">
-            <MudTextField @bind-Value="Tenant.Name" Label="Nombre del Tenant" Required="true"
-                          RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+            <MudSwitch @bind-Value="_isBulkMode" Color="Color.Info" Label="Modo Masivo (Múltiples DBs del mismo servidor)" Class="mb-4" />
+
+            @if (!_isBulkMode)
+            {
+                <MudTextField @bind-Value="Tenant.Name" Label="Nombre del Tenant" Required="true"
+                              RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+            }
 
             <MudSelect @bind-Value="Tenant.DatabaseProvider" Label="Proveedor de Base de Datos"
-                       Variant="Variant.Outlined" Class="mb-3" Required="true">
+                       Variant="Variant.Outlined" Class="mb-3" Required="true" T="DatabaseProvider" Disabled="_discovering">
                 <MudSelectItem Value="DatabaseProvider.SqlServer">SQL Server</MudSelectItem>
                 <MudSelectItem Value="DatabaseProvider.PostgreSql">PostgreSQL</MudSelectItem>
                 <MudSelectItem Value="DatabaseProvider.MySql">MySQL / MariaDB</MudSelectItem>
                 <MudSelectItem Value="DatabaseProvider.Sqlite">SQLite</MudSelectItem>
-                <MudSelectItem Value="DatabaseProvider.Generic">Otra BD Relacional (Genérica)</MudSelectItem>
             </MudSelect>
 
-            <MudTextField @bind-Value="Tenant.ConnectionString" Label="Connection String"
-                          Required="true" RequiredError="La connection string es requerida"
-                          Variant="Variant.Outlined" Lines="3" Class="mb-3"
-                          HelperText="Ej: Server=localhost;Database=MiDB;User Id=sa;Password=***;" />
+            <MudGrid Class="mb-3">
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" Value="_server" ValueChanged="OnServerChanged" Label="Nombre Servidor / IP" Variant="Variant.Outlined" Required="true" Margin="Margin.Dense" Disabled="_discovering" />
+                </MudItem>
+                <MudItem xs="4" sm="2">
+                    <MudTextField T="string" Value="_port" ValueChanged="OnPortChanged" Label="Puerto" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="1433" Disabled="_discovering" />
+                </MudItem>
+                <MudItem xs="4" sm="3">
+                    <MudTextField T="string" Value="_user" ValueChanged="OnUserChanged" Label="Usuario" Variant="Variant.Outlined" Required="true" Margin="Margin.Dense" Disabled="_discovering" />
+                </MudItem>
+                <MudItem xs="4" sm="3">
+                    <MudTextField T="string" Value="_password" ValueChanged="OnPasswordChanged" Label="Clave" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" Margin="Margin.Dense" Disabled="_discovering" />
+                </MudItem>
+            </MudGrid>
 
-            <MudSwitch @bind-Value="Tenant.IsActive" Color="Color.Success" Label="Activo" Class="mb-3" />
+            @if (!_isBulkMode)
+            {
+                <MudTextField T="string" Value="_database" ValueChanged="OnDatabaseChanged" Label="Base de Datos" Variant="Variant.Outlined" Required="true" Margin="Margin.Dense" Class="mb-3" Disabled="_discovering" />
+            }
+
+            <MudTextField @bind-Value="Tenant.ConnectionString" Label="@(_isBulkMode ? "Connection String Generada" : "Connection String")"
+                          Required="true" RequiredError="La connection string es requerida"
+                          Variant="Variant.Outlined" Lines="2" Class="mb-3" ReadOnly="true"
+                          HelperText="Se autogenera con los campos anteriores" />
+
+            @if (_isBulkMode && IsNew)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="DiscoverDatabases" 
+                           Disabled="_discovering" StartIcon="@Icons.Material.Filled.Search">
+                    @(_discovering ? "Buscando..." : "Verificar y Listar Bases de Datos")
+                </MudButton>
+
+                @if (_discoveredDatabases.Any())
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Selecciona las bases de datos a importar:</MudText>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <MudSimpleTable Dense="true" Hover="true" Bordered="true">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">Sel.</th>
+                                    <th>Nombre DB Original</th>
+                                    <th>Nombre del Tenant (Editable)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var db in _discoveredDatabases)
+                                {
+                                    <tr>
+                                        <td><MudCheckBox @bind-Value="db.Selected" Color="Color.Primary" Dense="true" /></td>
+                                        <td>@db.DbName</td>
+                                        <td>
+                                            <MudTextField @bind-Value="db.CustomName" Placeholder="Nombre personalizado" 
+                                                          Margin="Margin.Dense" Variant="Variant.Text" 
+                                                          Disabled="!db.Selected" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </div>
+                }
+            }
+
+            @if (!_isBulkMode)
+            {
+                <MudSwitch @bind-Value="Tenant.IsActive" Color="Color.Success" Label="Activo" Class="mb-3" />
+            }
 
             @if (!string.IsNullOrEmpty(_helperText))
             {
-                <MudAlert Severity="@_helperSeverity" Class="mt-2">@_helperText</MudAlert>
+                <MudAlert Severity="@_helperSeverity" Class="mt-2" Dense="true">@_helperText</MudAlert>
             }
         </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancelar</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit"
-                   Disabled="@(!_formValid || _saving)">
+                   Disabled="@(!_formValid || _saving || (_isBulkMode && !_discoveredDatabases.Any(d => d.Selected)))">
             @if (_saving) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" /> }
-            @(IsNew ? "Crear" : "Guardar")
+            @(IsNew ? (_isBulkMode ? $"Crear {(_discoveredDatabases.Count(d => d.Selected))} Tenants" : "Crear") : "Guardar")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -46,10 +122,87 @@
     private MudForm _form = null!;
     private bool _formValid;
     private bool _saving;
+    private bool _discovering;
+    private bool _isBulkMode;
     private string _helperText = string.Empty;
     private Severity _helperSeverity = Severity.Info;
 
+    private string _server = string.Empty;
+    private string _port = string.Empty;
+    private string _user = string.Empty;
+    private string _password = string.Empty;
+    private string _database = string.Empty;
+
+    private void OnServerChanged(string val) { _server = val; UpdateConnString(); }
+    private void OnPortChanged(string val) { _port = val; UpdateConnString(); }
+    private void OnUserChanged(string val) { _user = val; UpdateConnString(); }
+    private void OnPasswordChanged(string val) { _password = val; UpdateConnString(); }
+    private void OnDatabaseChanged(string val) { _database = val; UpdateConnString(); }
+
+    private void UpdateConnString()
+    {
+        if (Tenant.DatabaseProvider == DatabaseProvider.SqlServer)
+        {
+            var serverPart = string.IsNullOrWhiteSpace(_port) ? _server : $"{_server},{_port}";
+            var dbPart = string.IsNullOrWhiteSpace(_database) ? "" : $"Database={_database};";
+            // Agregamos Encrypt=False para mayor compatibilidad con SQL Server 2005/2008
+            Tenant.ConnectionString = $"Server={serverPart};{dbPart}User Id={_user};Password={_password};TrustServerCertificate=True;Encrypt=False;";
+        }
+    }
+
+    private List<DiscoveredDbItem> _discoveredDatabases = new();
+
+    private class DiscoveredDbItem
+    {
+        public string DbName { get; set; } = "";
+        public string CustomName { get; set; } = "";
+        public bool Selected { get; set; } = true;
+    }
+
     private void Cancel() => MudDialog.Cancel();
+
+    private async Task DiscoverDatabases()
+    {
+        if (string.IsNullOrWhiteSpace(Tenant.ConnectionString))
+        {
+            _helperText = "Ingresa una connection string para buscar bases de datos.";
+            _helperSeverity = Severity.Warning;
+            return;
+        }
+
+        _discovering = true;
+        _helperText = "";
+        _discoveredDatabases.Clear();
+        StateHasChanged(); 
+        await Task.Yield(); // Ceder el control a la UI para que renderice el estado deshabilitado
+        await Task.Delay(100); // Pequeña pausa táctica para asegurar el renderizado
+
+        try
+        {
+            var databases = await TenantService.DiscoverDatabasesAsync(Tenant.ConnectionString, Tenant.DatabaseProvider);
+            _discoveredDatabases = databases.Select(name => new DiscoveredDbItem 
+            { 
+                DbName = name, 
+                CustomName = name 
+            }).ToList();
+
+            if (!_discoveredDatabases.Any())
+            {
+                _helperText = "No se encontraron bases de datos de usuario en este servidor.";
+                _helperSeverity = Severity.Info;
+            }
+        }
+        catch (Exception ex)
+        {
+            _helperText = $"Error al buscar: {ex.Message}";
+            _helperSeverity = Severity.Error;
+        }
+        finally
+        {
+            _discovering = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task Submit()
     {
@@ -61,10 +214,31 @@
 
         try
         {
-            if (IsNew)
-                await TenantService.CreateAsync(Tenant);
+            if (_isBulkMode && IsNew)
+            {
+                var selectedDbs = _discoveredDatabases.Where(d => d.Selected).ToList();
+                var newTenants = new List<TenantDto>();
+
+                foreach (var db in selectedDbs)
+                {
+                    newTenants.Add(new TenantDto
+                    {
+                        Name = string.IsNullOrWhiteSpace(db.CustomName) ? db.DbName : db.CustomName,
+                        ConnectionString = BuildSpecificConnectionString(Tenant.ConnectionString, db.DbName),
+                        DatabaseProvider = Tenant.DatabaseProvider,
+                        IsActive = true
+                    });
+                }
+
+                await TenantService.CreateBulkAsync(newTenants);
+            }
             else
-                await TenantService.UpdateAsync(Tenant);
+            {
+                if (IsNew)
+                    await TenantService.CreateAsync(Tenant);
+                else
+                    await TenantService.UpdateAsync(Tenant);
+            }
 
             MudDialog.Close(DialogResult.Ok(true));
         }
@@ -77,5 +251,19 @@
         {
             _saving = false;
         }
+    }
+
+    private string BuildSpecificConnectionString(string baseConn, string dbName)
+    {
+        // Lógica simple para inyectar o reemplazar la base de datos
+        // Intentamos quitar cualquier rastro de Database/Initial Catalog existente
+        var parts = baseConn.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !p.Trim().StartsWith("Database=", StringComparison.OrdinalIgnoreCase) && 
+                         !p.Trim().StartsWith("Initial Catalog=", StringComparison.OrdinalIgnoreCase) &&
+                         !p.Trim().StartsWith("db=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        
+        parts.Add($"Database={dbName}");
+        return string.Join(";", parts);
     }
 }

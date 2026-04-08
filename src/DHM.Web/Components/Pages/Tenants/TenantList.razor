@@ -13,10 +13,20 @@
     Administra los clientes y sus bases de datos monitoreadas
 </MudText>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-           OnClick="OpenCreateDialog" Class="mb-4">
-    Nuevo Tenant
-</MudButton>
+<div class="d-flex align-center mb-4">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog" Class="mr-2">
+        Nuevo Tenant
+    </MudButton>
+
+    @if (_selectedTenants.Any())
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                   OnClick="DeleteSelectedTenants" Class="animate__animated animate__fadeIn">
+            Eliminar seleccionados (@_selectedTenants.Count)
+        </MudButton>
+    }
+</div>
 
 @if (_loading)
 {
@@ -25,6 +35,7 @@
 else
 {
     <MudTable Items="@_tenants" Hover="true" Elevation="2" Dense="true" Striped="true"
+              MultiSelection="true" @bind-SelectedItems="_selectedTenants"
               Style="border-radius: 12px;">
         <HeaderContent>
             <MudTh>Nombre</MudTh>
@@ -69,6 +80,7 @@ else
 
 @code {
     private List<TenantDto> _tenants = new();
+    private HashSet<TenantDto> _selectedTenants = new();
     private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
@@ -80,7 +92,30 @@ else
     {
         _loading = true;
         _tenants = (await TenantService.GetAllAsync()).ToList();
+        _selectedTenants.Clear();
         _loading = false;
+    }
+
+    private async Task DeleteSelectedTenants()
+    {
+        var count = _selectedTenants.Count;
+        var confirmed = await ConfirmDeleteAsync($"¿Estás seguro de que deseas eliminar los {count} tenants seleccionados?");
+        
+        if (confirmed)
+        {
+            _loading = true;
+            try
+            {
+                await TenantService.DeleteBulkAsync(_selectedTenants.Select(x => x.Id));
+                Snackbar.Add($"{count} tenants eliminados exitosamente", Severity.Warning);
+                await LoadTenantsAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al eliminar en bloque: {ex.Message}", Severity.Error);
+                _loading = false;
+            }
+        }
     }
 
     private async Task OpenCreateDialog()

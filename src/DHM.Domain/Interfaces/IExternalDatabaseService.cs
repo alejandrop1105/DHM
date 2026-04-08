@@ -20,4 +20,7 @@ public interface IExternalDatabaseService
 
     /// <summary>Prueba la conexión a la BD externa.</summary>
     Task<bool> TestConnectionAsync(string connectionString, DatabaseProvider provider);
+
+    /// <summary>Retorna la lista de nombres de bases de datos disponibles en el servidor.</summary>
+    Task<IEnumerable<string>> GetDatabaseNamesAsync(string connectionString, DatabaseProvider provider);
 }
