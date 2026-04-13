@@ -31,14 +31,53 @@
 {
     <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
 }
-else if (!_groups.Any())
+else if (!_groups.Any() && !_tags.Any())
 {
     <MudAlert Severity="Severity.Info" Class="mt-4">
-        No hay grupos creados. Creá un grupo primero para poder agregar etiquetas.
+        No hay grupos ni etiquetas creados. Creá un grupo primero para poder agregar etiquetas organizadas.
     </MudAlert>
 }
 else
 {
+    var tagsSinGrupo = _tags.Where(t => t.GroupId == null).OrderBy(t => t.Name).ToList();
+    if (tagsSinGrupo.Any())
+    {
+        <MudPaper Elevation="2" Class="mb-4" Style="border-radius: 12px; overflow: hidden;">
+            <div style="background-color: #607d8b; padding: 12px 20px;" class="d-flex justify-space-between align-center">
+                <div class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.FolderOff" Style="color: white;" />
+                    <MudText Typo="Typo.h6" Style="color: white; font-weight: 600;">Sin grupo</MudText>
+                    <MudChip T="string" Size="Size.Small" Style="background-color: rgba(255,255,255,0.25); color: white;">
+                        @tagsSinGrupo.Count etiqueta@(tagsSinGrupo.Count != 1 ? "s" : "")
+                    </MudChip>
+                </div>
+            </div>
+            <div class="pa-3">
+                <MudTable Items="@tagsSinGrupo" Hover="true" Dense="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Nombre</MudTh>
+                        <MudTh>Vista Previa</MudTh>
+                        <MudTh>Color (Hex)</MudTh>
+                        <MudTh>Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Nombre">@context.Name</MudTd>
+                        <MudTd DataLabel="Vista Previa">
+                            <MudChip T="string" Style="@($"background-color: {context.Color}; color: white;")">@context.Name</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Color (Hex)"><code>@context.Color</code></MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => OpenEditTagDialog(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                           OnClick="@(() => DeleteTag(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudPaper>
+    }
+
     @foreach (var group in _groups.OrderBy(g => g.SortOrder).ThenBy(g => g.Name))
     {
         var tagsInGroup = _tags.Where(t => t.GroupId == group.Id).OrderBy(t => t.Name).ToList();

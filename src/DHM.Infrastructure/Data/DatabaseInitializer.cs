@@ -109,6 +109,17 @@ public class DatabaseInitializer
                 FOREIGN KEY (TenantId) REFERENCES Tenants(Id) ON DELETE CASCADE
             )");
 
+        // Tabla de SavedQueries
+        await connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS SavedQueries (
+                Id TEXT PRIMARY KEY,
+                Name TEXT NOT NULL,
+                Description TEXT,
+                SqlText TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT
+            )");
+
         // Índices para mejorar performance
         await connection.ExecuteAsync(@"
             CREATE INDEX IF NOT EXISTS IX_HealthTests_TenantId ON HealthTests(TenantId);

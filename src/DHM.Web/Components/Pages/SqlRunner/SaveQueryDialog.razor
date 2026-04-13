@@ -1,0 +1,36 @@
+@using DHM.Application.DTOs
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="Query.Name" Label="Nombre de la Consulta" Required="true" RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="Query.Description" Label="Descripción (Opcional)" Variant="Variant.Outlined" Lines="3" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_formValid)">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public SavedQueryDto Query { get; set; } = new();
+
+    private MudForm _form = null!;
+    private bool _formValid;
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_formValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Query));
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

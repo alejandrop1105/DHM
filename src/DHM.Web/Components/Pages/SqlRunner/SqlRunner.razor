@@ -1,0 +1,360 @@
+@page "/sql-runner"
+@using DHM.Application.DTOs
+@using DHM.Application.Interfaces
+@inject ISavedQueryService SavedQueryService
+@inject ITenantService TenantService
+@inject ITagService TagService
+@inject ISqlExecutionService SqlExecutionService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Ejecutor SQL - DHM</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">
+    <MudIcon Icon="@Icons.Material.Filled.Terminal" Class="mr-2" />
+    Ejecutor SQL Multi-Tenant
+</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Ejecuta consultas de manera simultánea en varios tenants o recupera consultas guardadas.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" md="4">
+        <MudSelect T="Guid?" Label="Consultas Guardadas" Value="@_selectedSavedQueryId" ValueChanged="OnSavedQuerySelected" Variant="Variant.Outlined" Disabled="_isExecuting || _loading">
+            <MudSelectItem T="Guid?" Value="@(null)">-- Nueva Consulta (Vacía) --</MudSelectItem>
+            @foreach (var q in _savedQueries)
+            {
+                <MudSelectItem T="Guid?" Value="@q.Id">
+                    <div class="d-flex align-center gap-2" style="width: 100%;">
+                        <span style="font-weight: 500;">@q.Name</span>
+                        <span class="mud-text-secondary text-truncate" style="font-size: 0.75rem; max-width: 300px;">
+                            - @(string.IsNullOrWhiteSpace(q.Description) ? q.SqlText : q.Description)
+                        </span>
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="TagDto" Label="Filtrar Tenants por Etiquetas" MultiSelection="true" @bind-SelectedValues="_selectedFilterTags" 
+                   Variant="Variant.Outlined" Disabled="_isExecuting || _loading" ToStringFunc="@(t => t?.Name)">
+            @foreach (var group in _availableTags.GroupBy(t => t.GroupName).OrderBy(g => g.Key))
+            {
+                <MudSelectItem T="TagDto" Disabled="true" Class="mud-text-secondary mt-1 mb-1">
+                    <b>@(string.IsNullOrEmpty(group.Key) ? "Sin grupo" : group.Key)</b>
+                </MudSelectItem>
+                @foreach (var tag in group.OrderBy(t => t.Name))
+                {
+                    <MudSelectItem T="TagDto" Value="@tag">
+                        <div class="d-flex align-center pl-3">
+                            <MudIcon Icon="@Icons.Material.Filled.Label" Style="@($"color: {tag.Color};")" Size="Size.Small" Class="mr-2" />
+                            @tag.Name
+                        </div>
+                    </MudSelectItem>
+                }
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="Guid" Label="Seleccionar Tenants" MultiSelection="true" @bind-SelectedValues="_selectedTenantIds" 
+                   Variant="Variant.Outlined" Disabled="_isExecuting || _loading" MaxHeight="400"
+                   MultiSelectionTextFunc="@(values => string.Join(", ", _tenants.Where(t => _selectedTenantIds.Contains(t.Id)).Select(t => t.Name)))">
+            @foreach (var t in FilteredTenants)
+            {
+                <MudSelectItem T="Guid" Value="@t.Id">
+                    <div class="d-flex align-center gap-2" style="width: 100%;">
+                        <span>@t.Name</span>
+                        @if (t.Tags != null && t.Tags.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-1 ml-auto justify-end">
+                                @foreach (var tag in t.Tags.OrderBy(tg => tg.Name))
+                                {
+                                    <div style="@($"border: 1px solid {tag.Color}; color: {tag.Color}; font-size: 0.70rem; padding: 0px 6px; border-radius: 12px; white-space: nowrap; line-height: 1.5;")">
+                                        @tag.Name
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-0 mb-4">
+    <!-- El editor no tiene padding extra para que el textarea llene el cuadro -->
+    <MudTextField @bind-Value="_currentSql" Lines="12" Variant="Variant.Outlined" Placeholder="Escribe tu consulta SQL aquí (ej: SELECT * FROM Usuarios)..." Style="font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; background-color: rgba(0,0,0,0.2);" Disabled="_isExecuting" Immediate="true" />
+</MudPaper>
+
+<div class="d-flex gap-3 mb-6">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" 
+               OnClick="ExecuteAsync" Disabled="@(_isExecuting || string.IsNullOrWhiteSpace(_currentSql) || !_selectedTenantIds.Any())">
+        @if (_isExecuting)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+            <span>Ejecutando...</span>
+        }
+        else
+        {
+            <span>Ejecutar Consulta</span>
+        }
+    </MudButton>
+
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Save" 
+               OnClick="SaveQueryAsync" Disabled="@(string.IsNullOrWhiteSpace(_currentSql) || _isExecuting)">
+        Guardar Consulta
+    </MudButton>
+
+    @if (_selectedSavedQueryId != null)
+    {
+        <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteQueryAsync" Disabled="_isExecuting">
+            Eliminar
+        </MudButton>
+    }
+</div>
+
+@if (_results != null)
+{
+    <MudText Typo="Typo.h6" Class="mb-3">
+        <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" />
+        Resultados de la Ejecución
+    </MudText>
+
+    @if (_results.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning">No se ejecutó en ningún tenant.</MudAlert>
+    }
+    else
+    {
+        <MudExpansionPanels MultiExpansion="true" Class="mb-6">
+            @foreach (var result in _results.OrderBy(r => r.TenantName))
+            {
+                var icon = result.IsSuccess ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error;
+                var color = result.IsSuccess ? Color.Success : Color.Error;
+
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@icon" Color="@color" Class="mr-3" />
+                            <MudText><b>@result.TenantName</b></MudText>
+                            <MudText Class="ml-auto mud-text-secondary" Typo="Typo.caption">
+                                @if (result.IsSuccess)
+                                {
+                                    var count = result.Data?.Count() ?? 0;
+                                    <span class="mr-3">@(count > 1000 ? "+1000" : count.ToString()) filas</span>
+                                }
+                                @result.DurationMs ms
+                            </MudText>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (!result.IsSuccess)
+                        {
+                            <MudAlert Severity="Severity.Error" Class="mb-2">@result.ErrorMessage</MudAlert>
+                        }
+                        else if (result.Data == null || !result.Data.Any())
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mb-2">La consulta se ejecutó exitosamente pero no generó resultados (0 filas).</MudAlert>
+                        }
+                        else
+                        {
+                            var rows = result.Data.Take(1000).ToList();
+                            var firstRow = rows.First();
+                            var columns = firstRow.Keys.ToList();
+
+                            <div style="overflow-x: auto; max-width: 100%;">
+                                <MudTable Items="@rows" Dense="true" Hover="true" Striped="true" Elevation="0" Breakpoint="Breakpoint.None">
+                                    <HeaderContent>
+                                        @foreach (var col in columns)
+                                        {
+                                            <MudTh><span style="white-space: nowrap;">@col</span></MudTh>
+                                        }
+                                    </HeaderContent>
+                                    <RowTemplate Context="rowDict">
+                                        @foreach (var col in columns)
+                                        {
+                                            <MudTd DataLabel="@col">
+                                                <span style="white-space: nowrap;">
+                                                    @if (rowDict.TryGetValue(col, out var val))
+                                                    {
+                                                        @(val?.ToString())
+                                                    }
+                                                </span>
+                                            </MudTd>
+                                        }
+                                    </RowTemplate>
+                                </MudTable>
+                            </div>
+                            @if (result.Data.Count() > 1000)
+                            {
+                                <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">Solamente se visualizan las primeras 1000 filas para este tenant.</MudAlert>
+                            }
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _isExecuting = false;
+
+    private List<SavedQueryDto> _savedQueries = new();
+    private List<TenantDto> _tenants = new();
+    private List<TagDto> _availableTags = new();
+
+    private Guid? _selectedSavedQueryId;
+    private IReadOnlyCollection<Guid> _selectedTenantIds { get; set; } = new HashSet<Guid>();
+    private IReadOnlyCollection<TagDto> _selectedFilterTags { get; set; } = new HashSet<TagDto>();
+    
+    private IEnumerable<TenantDto> FilteredTenants => 
+        _selectedFilterTags.Any() 
+            ? _tenants.Where(t => t.Tags != null && _selectedFilterTags.Any(filter => t.Tags.Any(tag => tag.Id == filter.Id)))
+            : _tenants;
+    private string _currentSql = string.Empty;
+
+    private List<TenantExecutionResultDto>? _results;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
+            _tenants = (await TenantService.GetAllAsync()).Where(t => t.IsActive).OrderBy(t => t.Name).ToList();
+            _availableTags = (await TagService.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar datos: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnSavedQuerySelected(Guid? queryId)
+    {
+        _selectedSavedQueryId = queryId;
+        if (queryId.HasValue)
+        {
+            var query = _savedQueries.FirstOrDefault(q => q.Id == queryId.Value);
+            if (query != null)
+            {
+                _currentSql = query.SqlText;
+            }
+        }
+        else
+        {
+            _currentSql = string.Empty;
+        }
+    }
+
+    private async Task SaveQueryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentSql)) return;
+
+        SavedQueryDto existingQuery = _selectedSavedQueryId.HasValue
+            ? _savedQueries.FirstOrDefault(q => q.Id == _selectedSavedQueryId.Value) ?? new SavedQueryDto()
+            : new SavedQueryDto();
+
+        existingQuery.SqlText = _currentSql;
+
+        var parameters = new DialogParameters<SaveQueryDialog>
+        {
+            { x => x.Query, new SavedQueryDto { Id = existingQuery.Id, Name = existingQuery.Name, Description = existingQuery.Description, SqlText = _currentSql } }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<SaveQueryDialog>("Guardar Consulta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var dto = (SavedQueryDto)result.Data!;
+            if (dto.Id == Guid.Empty)
+            {
+                await SavedQueryService.CreateAsync(dto);
+                Snackbar.Add("Consulta guardada exitosamente.", Severity.Success);
+            }
+            else
+            {
+                await SavedQueryService.UpdateAsync(dto);
+                Snackbar.Add("Consulta actualizada exitosamente.", Severity.Success);
+            }
+
+            _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
+            _selectedSavedQueryId = _savedQueries.FirstOrDefault(q => q.Name == dto.Name)?.Id;
+        }
+    }
+
+    private async Task DeleteQueryAsync()
+    {
+        if (!_selectedSavedQueryId.HasValue) return;
+
+        var query = _savedQueries.FirstOrDefault(q => q.Id == _selectedSavedQueryId.Value);
+        if (query == null) return;
+
+        var parameters = new DialogParameters<ConfirmDialog> { { x => x.Message, $"¿Seguro que deseas eliminar la consulta '{query.Name}'?" } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await SavedQueryService.DeleteAsync(query.Id);
+            Snackbar.Add("Consulta eliminada.", Severity.Info);
+            
+            _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
+            _selectedSavedQueryId = null;
+            _currentSql = string.Empty;
+        }
+    }
+
+    private async Task ExecuteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentSql) || !_selectedTenantIds.Any()) return;
+
+        _isExecuting = true;
+        _results = null;
+        StateHasChanged();
+
+        try
+        {
+            var res = await SqlExecutionService.ExecuteAcrossTenantsAsync(_selectedTenantIds, _currentSql);
+            _results = res.ToList();
+            
+            var successCount = _results.Count(r => r.IsSuccess);
+            if (successCount == _results.Count)
+            {
+                Snackbar.Add($"Ejecución exitosa en {successCount} tenants.", Severity.Success);
+            }
+            else if (successCount > 0)
+            {
+                Snackbar.Add($"Ejecución parcial: Errores en {_results.Count - successCount} tenants.", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add($"La consulta falló en todos los tenants seleccionados.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error inesperado en la ejecución: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _isExecuting = false;
+            StateHasChanged();
+        }
+    }
+}
