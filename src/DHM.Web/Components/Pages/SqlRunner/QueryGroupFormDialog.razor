@@ -1,0 +1,39 @@
+@using DHM.Application.DTOs
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="Group.Name" Label="Nombre del Grupo" Required="true" 
+                          RequiredError="El nombre es requerido" Variant="Variant.Outlined" Class="mb-3" />
+            
+            <MudTextField @bind-Value="Group.Description" Label="Descripción (Opcional)" 
+                          Variant="Variant.Outlined" Lines="2" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_formValid)">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public QueryGroupDto Group { get; set; } = new();
+
+    private MudForm _form = null!;
+    private bool _formValid;
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_formValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Group));
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

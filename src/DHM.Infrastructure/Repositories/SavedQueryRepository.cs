@@ -32,14 +32,16 @@ public class SavedQueryRepository : ISavedQueryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync(@"
-            INSERT INTO SavedQueries (Id, Name, Description, SqlText, CreatedAt, UpdatedAt)
-            VALUES (@Id, @Name, @Description, @SqlText, @CreatedAt, @UpdatedAt)",
+            INSERT INTO SavedQueries (Id, Name, Description, SqlText, TenantIds, GroupName, CreatedAt, UpdatedAt)
+            VALUES (@Id, @Name, @Description, @SqlText, @TenantIds, @GroupName, @CreatedAt, @UpdatedAt)",
             new
             {
                 Id = savedQuery.Id.ToString(),
                 savedQuery.Name,
                 savedQuery.Description,
                 savedQuery.SqlText,
+                savedQuery.TenantIds,
+                savedQuery.GroupName,
                 CreatedAt = savedQuery.CreatedAt.ToString("o"),
                 UpdatedAt = savedQuery.UpdatedAt?.ToString("o")
             });
@@ -51,13 +53,15 @@ public class SavedQueryRepository : ISavedQueryRepository
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync(@"
             UPDATE SavedQueries 
-            SET Name = @Name, Description = @Description, SqlText = @SqlText, UpdatedAt = @UpdatedAt
+            SET Name = @Name, Description = @Description, SqlText = @SqlText, TenantIds = @TenantIds, GroupName = @GroupName, UpdatedAt = @UpdatedAt
             WHERE Id = @Id",
             new
             {
                 savedQuery.Name,
                 savedQuery.Description,
                 savedQuery.SqlText,
+                savedQuery.TenantIds,
+                savedQuery.GroupName,
                 UpdatedAt = savedQuery.UpdatedAt?.ToString("o"),
                 Id = savedQuery.Id.ToString()
             });
@@ -67,5 +71,25 @@ public class SavedQueryRepository : ISavedQueryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync("DELETE FROM SavedQueries WHERE Id = @Id", new { Id = id.ToString() });
+    }
+
+    public async Task RenameGroupAsync(string oldName, string newName)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(@"
+            UPDATE SavedQueries 
+            SET GroupName = @NewName 
+            WHERE GroupName = @OldName", 
+            new { OldName = oldName, NewName = newName });
+    }
+
+    public async Task ClearGroupAsync(string groupName)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        await connection.ExecuteAsync(@"
+            UPDATE SavedQueries 
+            SET GroupName = NULL 
+            WHERE GroupName = @GroupName", 
+            new { GroupName = groupName });
     }
 }

@@ -4,6 +4,7 @@ public class TenantExecutionResultDto
 {
     public Guid TenantId { get; set; }
     public string TenantName { get; set; } = string.Empty;
+    public List<TagDto> TenantTags { get; set; } = new();
     public IEnumerable<IDictionary<string, object>>? Data { get; set; }
     public string? ErrorMessage { get; set; }
     public long DurationMs { get; set; }

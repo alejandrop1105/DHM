@@ -116,9 +116,24 @@ public class DatabaseInitializer
                 Name TEXT NOT NULL,
                 Description TEXT,
                 SqlText TEXT NOT NULL,
+                TenantIds TEXT,
+                GroupName TEXT,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT
             )");
+
+        // Tabla de QueryGroups
+        await connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS QueryGroups (
+                Id TEXT PRIMARY KEY,
+                Name TEXT NOT NULL,
+                Description TEXT,
+                CreatedAt TEXT NOT NULL
+            )");
+
+        // Migración: agregar columnas si no existen (para bases de datos existentes)
+        try { await connection.ExecuteAsync("ALTER TABLE SavedQueries ADD COLUMN TenantIds TEXT;"); } catch { }
+        try { await connection.ExecuteAsync("ALTER TABLE SavedQueries ADD COLUMN GroupName TEXT;"); } catch { }
 
         // Índices para mejorar performance
         await connection.ExecuteAsync(@"

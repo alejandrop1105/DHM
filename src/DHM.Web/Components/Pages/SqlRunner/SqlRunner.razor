@@ -5,6 +5,7 @@
 @inject ITenantService TenantService
 @inject ITagService TagService
 @inject ISqlExecutionService SqlExecutionService
+@inject IQueryGroupService QueryGroupService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -27,16 +28,29 @@
     <MudItem xs="12" md="4">
         <MudSelect T="Guid?" Label="Consultas Guardadas" Value="@_selectedSavedQueryId" ValueChanged="OnSavedQuerySelected" Variant="Variant.Outlined" Disabled="_isExecuting || _loading">
             <MudSelectItem T="Guid?" Value="@(null)">-- Nueva Consulta (Vacía) --</MudSelectItem>
-            @foreach (var q in _savedQueries)
+            @{
+                var groups = _savedQueries
+                    .GroupBy(q => string.IsNullOrWhiteSpace(q.GroupName) ? "Sin grupo" : q.GroupName)
+                    .OrderBy(g => g.Key == "Sin grupo" ? "ZZZ" : g.Key);
+            }
+            @foreach (var group in groups)
             {
-                <MudSelectItem T="Guid?" Value="@q.Id">
-                    <div class="d-flex align-center gap-2" style="width: 100%;">
-                        <span style="font-weight: 500;">@q.Name</span>
-                        <span class="mud-text-secondary text-truncate" style="font-size: 0.75rem; max-width: 300px;">
-                            - @(string.IsNullOrWhiteSpace(q.Description) ? q.SqlText : q.Description)
-                        </span>
-                    </div>
+                <MudSelectItem T="Guid?" Disabled="true">
+                    <span style="font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7;">
+                        📂 @group.Key
+                    </span>
                 </MudSelectItem>
+                @foreach (var q in group.OrderBy(x => x.Name))
+                {
+                    <MudSelectItem T="Guid?" Value="@q.Id">
+                        <div class="d-flex align-center gap-2 pl-3" style="width: 100%;">
+                            <span style="font-weight: 500;">@q.Name</span>
+                            <span class="mud-text-secondary text-truncate" style="font-size: 0.75rem; max-width: 250px;">
+                                - @(string.IsNullOrWhiteSpace(q.Description) ? q.SqlText?.Substring(0, Math.Min(60, q.SqlText?.Length ?? 0)) + "..." : q.Description)
+                            </span>
+                        </div>
+                    </MudSelectItem>
+                }
             }
         </MudSelect>
     </MudItem>
@@ -61,7 +75,23 @@
         </MudSelect>
     </MudItem>
     <MudItem xs="12" md="4">
-        <MudSelect T="Guid" Label="Seleccionar Tenants" MultiSelection="true" @bind-SelectedValues="_selectedTenantIds" 
+        <div class="d-flex align-center gap-2 mb-1">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Tenants</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                       OnClick="SelectAllTenants" Disabled="_isExecuting || _loading || !FilteredTenants.Any()"
+                       Style="min-width: auto; padding: 0 6px; height: 22px; font-size: 0.7rem;">
+                Selec. todos (@FilteredTenants.Count())
+            </MudButton>
+            @if (_selectedTenantIds.Any())
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
+                           OnClick="ClearTenants" Disabled="_isExecuting"
+                           Style="min-width: auto; padding: 0 6px; height: 22px; font-size: 0.7rem;">
+                    Limpiar
+                </MudButton>
+            }
+        </div>
+        <MudSelect T="Guid" @key="_tenantSelectKey" Label="Seleccionar Tenants" MultiSelection="true" @bind-SelectedValues="_selectedTenantIds" 
                    Variant="Variant.Outlined" Disabled="_isExecuting || _loading" MaxHeight="400"
                    MultiSelectionTextFunc="@(values => string.Join(", ", _tenants.Where(t => _selectedTenantIds.Contains(t.Id)).Select(t => t.Name)))">
             @foreach (var t in FilteredTenants)
@@ -86,6 +116,40 @@
         </MudSelect>
     </MudItem>
 </MudGrid>
+
+@if (_selectedSavedQueryId.HasValue && _editingQuery != null)
+{
+    <MudPaper Elevation="1" Class="pa-3 mb-4" Style="border-radius: 10px; border: 1px solid var(--mud-palette-primary-darken);">
+        <div class="d-flex align-center gap-2 mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Editar consulta seleccionada</MudText>
+        </div>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_editingQuery.Name" Label="Nombre" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudAutocomplete T="string" @bind-Value="_editingQuery.GroupName" Label="Grupo"
+                                 Variant="Variant.Outlined" Dense="true" Clearable="true"
+                                 SearchFunc="SearchExistingGroups" ResetValueOnEmptyText="true"
+                                 CoerceText="true" Placeholder="Sin grupo" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_editingQuery.Description" Label="Descripción" Variant="Variant.Outlined" Dense="true" />
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex gap-2 mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Save" OnClick="UpdateQueryMetaAsync"
+                       Disabled="_isExecuting">
+                Actualizar
+            </MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="CancelEditQuery">
+                Cancelar
+            </MudButton>
+        </div>
+    </MudPaper>
+}
 
 <MudPaper Elevation="0" Outlined="true" Class="pa-0 mb-4">
     <!-- El editor no tiene padding extra para que el textarea llene el cuadro -->
@@ -121,28 +185,95 @@
 
 @if (_results != null)
 {
-    <MudText Typo="Typo.h6" Class="mb-3">
-        <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" />
-        Resultados de la Ejecución
-    </MudText>
+    var errorCount = _results.Count(r => !r.IsSuccess);
+    var successCount = _results.Count(r => r.IsSuccess);
+    var filteredResults = _results
+        .Where(r => !_filterOnlyErrors || !r.IsSuccess)
+        .Where(r => _filterMinRows <= 0 || (r.IsSuccess && (r.Data?.Count() ?? 0) >= _filterMinRows) || (!r.IsSuccess && _filterMinRows <= 0))
+        .Where(r => !_filterResultTags.Any() || r.TenantTags.Any(t => _filterResultTags.Any(ft => ft.Id == t.Id)))
+        .OrderBy(r => _resultSortAsc ? r.TenantName : null)
+        .ThenByDescending(r => !_resultSortAsc ? r.TenantName : null)
+        .ToList();
+
+    <div class="d-flex align-center flex-wrap gap-3 mb-3">
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" />
+            Resultados de la Ejecución
+        </MudText>
+        <MudSpacer />
+        <!-- Chips resumen -->
+        <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">@successCount OK</MudChip>
+        @if (errorCount > 0)
+        {
+            <MudChip T="string" Color="Color.Error" Size="Size.Small" Icon="@Icons.Material.Filled.Error">@errorCount Error</MudChip>
+        }
+        <!-- Expandir/Comprimir todo -->
+        <MudTooltip Text="@(_resultsExpanded ? "Comprimir todo" : "Expandir todo")">
+            <MudToggleIconButton @bind-Toggled="_resultsExpanded"
+                                 Icon="@Icons.Material.Filled.UnfoldMore" Color="Color.Default"
+                                 ToggledIcon="@Icons.Material.Filled.UnfoldLess" ToggledColor="Color.Primary"
+                                 Size="Size.Small" />
+        </MudTooltip>
+        <!-- Filtro: etiquetas -->
+        <MudSelect T="TagDto" MultiSelection="true" @bind-SelectedValues="_filterResultTags"
+                   Placeholder="Filtrar por etiqueta" Variant="Variant.Outlined" Dense="true"
+                   Style="max-width: 200px;" ToStringFunc="@(t => t?.Name)"
+                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Label">
+            @foreach (var tag in _availableTags.OrderBy(t => t.Name))
+            {
+                <MudSelectItem T="TagDto" Value="@tag">
+                    <div class="d-flex align-center gap-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Label" Style="@($"color: {tag.Color};")" Size="Size.Small" />
+                        @tag.Name
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <!-- Orden A-Z / Z-A -->
+        <MudTooltip Text="@(_resultSortAsc ? "Orden A→Z" : "Orden Z→A")">
+            <MudIconButton Icon="@(_resultSortAsc ? Icons.Material.Filled.SortByAlpha : Icons.Material.Filled.Sort)"
+                           Color="Color.Default" Size="Size.Small"
+                           OnClick="@(() => _resultSortAsc = !_resultSortAsc)" />
+        </MudTooltip>
+        <!-- Filtro: solo errores -->
+        <MudTooltip Text="@(_filterOnlyErrors ? "Mostrando solo errores" : "Filtrar solo errores")">
+            <MudToggleIconButton @bind-Toggled="_filterOnlyErrors"
+                Icon="@Icons.Material.Outlined.FilterAlt" Color="Color.Default"
+                ToggledIcon="@Icons.Material.Filled.FilterAlt" ToggledColor="Color.Error" Size="Size.Small" />
+        </MudTooltip>
+        <!-- Filtro: mínimo de filas -->
+        <MudNumericField T="int" @bind-Value="_filterMinRows" Label="Mín. filas" Variant="Variant.Outlined"
+                         Style="max-width: 110px;" Min="0" Dense="true" HideSpinButtons="true"
+                         Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.TableRows" />
+    </div>
 
     @if (_results.Count == 0)
     {
         <MudAlert Severity="Severity.Warning">No se ejecutó en ningún tenant.</MudAlert>
     }
+    else if (!filteredResults.Any())
+    {
+        <MudAlert Severity="Severity.Info">Ningún resultado coincide con los filtros aplicados.</MudAlert>
+    }
     else
     {
         <MudExpansionPanels MultiExpansion="true" Class="mb-6">
-            @foreach (var result in _results.OrderBy(r => r.TenantName))
+            @foreach (var result in filteredResults)
             {
                 var icon = result.IsSuccess ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error;
                 var color = result.IsSuccess ? Color.Success : Color.Error;
 
-                <MudExpansionPanel>
+                <MudExpansionPanel @bind-Expanded="_resultsExpanded">
                     <TitleContent>
-                        <div class="d-flex align-center">
-                            <MudIcon Icon="@icon" Color="@color" Class="mr-3" />
+                        <div class="d-flex align-center flex-wrap gap-2">
+                            <MudIcon Icon="@icon" Color="@color" Class="mr-1" />
                             <MudText><b>@result.TenantName</b></MudText>
+                            @foreach (var tag in result.TenantTags.OrderBy(t => t.Name))
+                            {
+                                <div style="@($"border: 1px solid {tag.Color}; color: {tag.Color}; font-size: 0.68rem; padding: 0px 6px; border-radius: 12px; white-space: nowrap;")">
+                                    @tag.Name
+                                </div>
+                            }
                             <MudText Class="ml-auto mud-text-secondary" Typo="Typo.caption">
                                 @if (result.IsSuccess)
                                 {
@@ -210,10 +341,12 @@
     private List<SavedQueryDto> _savedQueries = new();
     private List<TenantDto> _tenants = new();
     private List<TagDto> _availableTags = new();
+    private List<QueryGroupDto> _allGroups = new();
 
     private Guid? _selectedSavedQueryId;
     private IReadOnlyCollection<Guid> _selectedTenantIds { get; set; } = new HashSet<Guid>();
     private IReadOnlyCollection<TagDto> _selectedFilterTags { get; set; } = new HashSet<TagDto>();
+    private int _tenantSelectKey = 0; // Key para forzar recreación del MudSelect
     
     private IEnumerable<TenantDto> FilteredTenants => 
         _selectedFilterTags.Any() 
@@ -222,6 +355,13 @@
     private string _currentSql = string.Empty;
 
     private List<TenantExecutionResultDto>? _results;
+    private int _filterMinRows = 0;
+    private bool _filterOnlyErrors = false;
+    private bool _resultSortAsc = true;
+    private IReadOnlyCollection<TagDto> _filterResultTags { get; set; } = new HashSet<TagDto>();
+    private bool _resultsExpanded = false;
+
+    private SavedQueryDto? _editingQuery;
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,6 +371,7 @@
             _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
             _tenants = (await TenantService.GetAllAsync()).Where(t => t.IsActive).OrderBy(t => t.Name).ToList();
             _availableTags = (await TagService.GetAllAsync()).ToList();
+            _allGroups = (await QueryGroupService.GetAllAsync()).ToList();
         }
         catch (Exception ex)
         {
@@ -251,11 +392,93 @@
             if (query != null)
             {
                 _currentSql = query.SqlText;
+                // Clonar para edición inline sin mutar la lista original
+                _editingQuery = new SavedQueryDto
+                {
+                    Id = query.Id,
+                    Name = query.Name,
+                    Description = query.Description,
+                    GroupName = query.GroupName,
+                    SqlText = query.SqlText,
+                    SelectedTenantIds = query.SelectedTenantIds.ToList()
+                };
+                // Rehidratar tenants guardados en la consulta
+                if (query.SelectedTenantIds.Any())
+                    _selectedTenantIds = new HashSet<Guid>(query.SelectedTenantIds);
             }
         }
         else
         {
             _currentSql = string.Empty;
+            _selectedTenantIds = new HashSet<Guid>();
+            _editingQuery = null;
+            _tenantSelectKey++;
+        }
+        StateHasChanged();
+    }
+
+    private void SelectAllTenants()
+    {
+        _selectedTenantIds = new HashSet<Guid>(FilteredTenants.Select(t => t.Id));
+        _tenantSelectKey++;
+        StateHasChanged();
+    }
+
+    private void ClearTenants()
+    {
+        _selectedTenantIds = new HashSet<Guid>();
+        _tenantSelectKey++;
+        StateHasChanged();
+    }
+
+    private List<string> GetExistingGroups() 
+    {
+        var groupNamesFromQueries = _savedQueries
+            .Where(q => !string.IsNullOrWhiteSpace(q.GroupName))
+            .Select(q => q.GroupName!)
+            .ToList();
+            
+        var groupNamesFromTable = _allGroups.Select(g => g.Name).ToList();
+        
+        return groupNamesFromQueries.Concat(groupNamesFromTable)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g)
+            .ToList();
+    }
+
+    private Task<IEnumerable<string>> SearchExistingGroups(string value, CancellationToken _)
+    {
+        var groups = GetExistingGroups()
+            .Where(g => string.IsNullOrEmpty(value) || g.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .AsEnumerable();
+        return Task.FromResult(groups);
+    }
+
+    private async Task UpdateQueryMetaAsync()
+    {
+        if (_editingQuery == null || string.IsNullOrWhiteSpace(_editingQuery.Name)) return;
+        _editingQuery.SelectedTenantIds = _selectedTenantIds.ToList();
+        await SavedQueryService.UpdateAsync(_editingQuery);
+        _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
+        // Actualizar referencia local
+        var updated = _savedQueries.FirstOrDefault(q => q.Id == _editingQuery.Id);
+        if (updated != null) _editingQuery = new SavedQueryDto
+        {
+            Id = updated.Id, Name = updated.Name, Description = updated.Description,
+            GroupName = updated.GroupName, SqlText = updated.SqlText,
+            SelectedTenantIds = updated.SelectedTenantIds.ToList()
+        };
+        Snackbar.Add("Consulta actualizada.", Severity.Success);
+        StateHasChanged();
+    }
+
+    private void CancelEditQuery()
+    {
+        if (_selectedSavedQueryId.HasValue)
+        {
+            var original = _savedQueries.FirstOrDefault(q => q.Id == _selectedSavedQueryId.Value);
+            if (original != null)
+                _editingQuery = new SavedQueryDto { Id = original.Id, Name = original.Name, Description = original.Description, GroupName = original.GroupName, SqlText = original.SqlText, SelectedTenantIds = original.SelectedTenantIds.ToList() };
         }
     }
 
@@ -267,14 +490,26 @@
             ? _savedQueries.FirstOrDefault(q => q.Id == _selectedSavedQueryId.Value) ?? new SavedQueryDto()
             : new SavedQueryDto();
 
-        existingQuery.SqlText = _currentSql;
+        var queryToEdit = new SavedQueryDto
+        {
+            Id = existingQuery.Id,
+            Name = existingQuery.Name,
+            Description = existingQuery.Description,
+            GroupName = existingQuery.GroupName,
+            SqlText = _currentSql,
+            SelectedTenantIds = _selectedTenantIds.ToList()
+        };
+
+        var existingGroups = GetExistingGroups();
 
         var parameters = new DialogParameters<SaveQueryDialog>
         {
-            { x => x.Query, new SavedQueryDto { Id = existingQuery.Id, Name = existingQuery.Name, Description = existingQuery.Description, SqlText = _currentSql } }
+            { x => x.Query, queryToEdit },
+            { x => x.AvailableTenants, _tenants },
+            { x => x.ExistingGroups, existingGroups }
         };
 
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
         var dialog = await DialogService.ShowAsync<SaveQueryDialog>("Guardar Consulta", parameters, options);
         var result = await dialog.Result;
 
@@ -294,6 +529,8 @@
 
             _savedQueries = (await SavedQueryService.GetAllAsync()).OrderBy(q => q.Name).ToList();
             _selectedSavedQueryId = _savedQueries.FirstOrDefault(q => q.Name == dto.Name)?.Id;
+            // Aplicar en pantalla los tenants que se guardaron en la consulta
+            _selectedTenantIds = new HashSet<Guid>(dto.SelectedTenantIds);
         }
     }
 
@@ -332,6 +569,13 @@
         {
             var res = await SqlExecutionService.ExecuteAcrossTenantsAsync(_selectedTenantIds, _currentSql);
             _results = res.ToList();
+            // Enriquecer resultados con etiquetas cruzando con _tenants
+            foreach (var r in _results)
+            {
+                var tenant = _tenants.FirstOrDefault(t => t.Id == r.TenantId);
+                if (tenant?.Tags != null)
+                    r.TenantTags = tenant.Tags.ToList();
+            }
             
             var successCount = _results.Count(r => r.IsSuccess);
             if (successCount == _results.Count)

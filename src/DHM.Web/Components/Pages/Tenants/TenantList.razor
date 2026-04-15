@@ -12,9 +12,46 @@
     <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
     Gestión de Tenants
 </MudText>
-<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
     Administra los clientes y sus bases de datos monitoreadas
 </MudText>
+
+@if (!_loading)
+{
+    <div class="d-flex flex-wrap gap-3 mb-4">
+        <MudPaper Elevation="1" Class="pa-3 d-flex align-center gap-2" Style="border-radius: 10px; min-width: 130px;">
+            <MudIcon Icon="@Icons.Material.Filled.Business" Color="Color.Primary" Size="Size.Small" />
+            <div>
+                <MudText Typo="Typo.h5" Style="line-height: 1; font-weight: 700;">@_tenants.Count</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Totales</MudText>
+            </div>
+        </MudPaper>
+        <MudPaper Elevation="1" Class="pa-3 d-flex align-center gap-2" Style="border-radius: 10px; min-width: 130px;">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+            <div>
+                <MudText Typo="Typo.h5" Style="line-height: 1; font-weight: 700;">@_tenants.Count(t => t.IsActive)</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Activos</MudText>
+            </div>
+        </MudPaper>
+        <MudPaper Elevation="1" Class="pa-3 d-flex align-center gap-2" Style="border-radius: 10px; min-width: 130px;">
+            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Small" />
+            <div>
+                <MudText Typo="Typo.h5" Style="line-height: 1; font-weight: 700;">@_tenants.Count(t => !t.IsActive)</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Inactivos</MudText>
+            </div>
+        </MudPaper>
+        @if (_selectedFilterTags.Any())
+        {
+            <MudPaper Elevation="1" Class="pa-3 d-flex align-center gap-2" Style="border-radius: 10px; min-width: 130px; border: 1px solid var(--mud-palette-primary);">
+                <MudIcon Icon="@Icons.Material.Filled.FilterAlt" Color="Color.Primary" Size="Size.Small" />
+                <div>
+                    <MudText Typo="Typo.h5" Style="line-height: 1; font-weight: 700;">@FilteredTenants.Count()</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Filtrados</MudText>
+                </div>
+            </MudPaper>
+        }
+    </div>
+}
 
 <MudPaper Elevation="0" Class="pa-4 mb-4 d-flex flex-wrap align-center gap-4" Style="background-color: transparent;">
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
@@ -204,10 +241,10 @@ else
     {
         return (size, breakpoint) switch
         {
-            (CardSize.Small, "xs") => 6,
-            (CardSize.Small, "sm") => 4,
-            (CardSize.Small, "md") => 3,
-            (CardSize.Small, "lg") => 2,
+            (CardSize.Small, "xs") => 3,
+            (CardSize.Small, "sm") => 3,
+            (CardSize.Small, "md") => 2,
+            (CardSize.Small, "lg") => 1,
             
             (CardSize.Medium, "xs") => 12,
             (CardSize.Medium, "sm") => 6,

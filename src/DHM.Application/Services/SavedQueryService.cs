@@ -34,7 +34,9 @@ public class SavedQueryService : ISavedQueryService
             Name = dto.Name,
             Description = dto.Description,
             SqlText = dto.SqlText,
-            CreatedAt = DateTime.UtcNow
+            GroupName = dto.GroupName,
+            CreatedAt = DateTime.UtcNow,
+            TenantIds = dto.SelectedTenantIds.Any() ? string.Join(",", dto.SelectedTenantIds) : null
         };
         return await _repository.CreateAsync(query);
     }
@@ -47,7 +49,9 @@ public class SavedQueryService : ISavedQueryService
         query.Name = dto.Name;
         query.Description = dto.Description;
         query.SqlText = dto.SqlText;
+        query.GroupName = dto.GroupName;
         query.UpdatedAt = DateTime.UtcNow;
+        query.TenantIds = dto.SelectedTenantIds.Any() ? string.Join(",", dto.SelectedTenantIds) : null;
 
         await _repository.UpdateAsync(query);
     }
@@ -63,7 +67,11 @@ public class SavedQueryService : ISavedQueryService
         Name = entity.Name,
         Description = entity.Description,
         SqlText = entity.SqlText,
+        GroupName = entity.GroupName,
         CreatedAt = entity.CreatedAt,
-        UpdatedAt = entity.UpdatedAt
+        UpdatedAt = entity.UpdatedAt,
+        SelectedTenantIds = string.IsNullOrWhiteSpace(entity.TenantIds) 
+            ? new List<Guid>() 
+            : entity.TenantIds.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ToList()
     };
 }

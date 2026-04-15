@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<ITagGroupRepository, TagGroupRepository>();
         services.AddScoped<ISavedQueryRepository, SavedQueryRepository>();
+        services.AddScoped<IQueryGroupRepository, QueryGroupRepository>();
 
         // Servicios de infraestructura
         services.AddScoped<IExternalDatabaseService, ExternalDatabaseService>();
@@ -40,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ITagGroupService, TagGroupService>();
         services.AddScoped<ISavedQueryService, SavedQueryService>();
         services.AddScoped<ISqlExecutionService, SqlExecutionService>();
+        services.AddScoped<IQueryGroupService, QueryGroupService>();
 
         return services;
     }

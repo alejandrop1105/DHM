@@ -8,4 +8,6 @@ public class SavedQueryDto
     public string SqlText { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<Guid> SelectedTenantIds { get; set; } = new();
+    public string? GroupName { get; set; }
 }

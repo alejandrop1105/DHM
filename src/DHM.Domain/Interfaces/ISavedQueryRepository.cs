@@ -9,4 +9,6 @@ public interface ISavedQueryRepository
     Task<Guid> CreateAsync(SavedQuery savedQuery);
     Task UpdateAsync(SavedQuery savedQuery);
     Task DeleteAsync(Guid id);
+    Task RenameGroupAsync(string oldName, string newName);
+    Task ClearGroupAsync(string groupName);
 }

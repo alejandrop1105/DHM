@@ -1,0 +1,130 @@
+@page "/sql-groups"
+@using DHM.Application.DTOs
+@using DHM.Application.Interfaces
+@inject IQueryGroupService QueryGroupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Class="mb-4">Gestión de Grupos de Consultas</MudText>
+
+<MudPaper Elevation="1" Class="pa-4 mb-6">
+    <div class="d-flex align-center mb-4">
+        <MudText Typo="Typo.h6">Grupos Existentes</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OnCreateGroup">
+            Nuevo Grupo
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-7" />
+    }
+    else
+    {
+        <MudTable Items="_groups" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Descripción</MudTh>
+                <MudTh>Consultas</MudTh>
+                <MudTh>Fecha Creación</MudTh>
+                <MudTh Style="text-align: right;">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">
+                    <MudText Typo="Typo.body1" Style="font-weight: 500;">@context.Name</MudText>
+                </MudTd>
+                <MudTd DataLabel="Descripción">@context.Description</MudTd>
+                <MudTd DataLabel="Consultas">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@context.QueryCount consultas</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Fecha Creación">@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                <MudTd DataLabel="Acciones" Style="text-align: right;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="@(() => OnEditGroup(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => OnDeleteGroup(context))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No hay grupos creados todavía.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    private bool _loading = true;
+    private IEnumerable<QueryGroupDto> _groups = new List<QueryGroupDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGroups();
+    }
+
+    private async Task LoadGroups()
+    {
+        _loading = true;
+        try
+        {
+            _groups = await QueryGroupService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar grupos: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnCreateGroup()
+    {
+        var parameters = new DialogParameters<QueryGroupFormDialog> { { x => x.Group, new QueryGroupDto() } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<QueryGroupFormDialog>("Nuevo Grupo de Consultas", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await QueryGroupService.CreateAsync((QueryGroupDto)result.Data!);
+            Snackbar.Add("Grupo creado exitosamente.", Severity.Success);
+            await LoadGroups();
+        }
+    }
+
+    private async Task OnEditGroup(QueryGroupDto group)
+    {
+        var parameters = new DialogParameters<QueryGroupFormDialog> { { x => x.Group, new QueryGroupDto 
+        { 
+            Id = group.Id, 
+            Name = group.Name, 
+            Description = group.Description 
+        } } };
+        
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<QueryGroupFormDialog>("Editar Grupo", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await QueryGroupService.UpdateAsync((QueryGroupDto)result.Data!);
+            Snackbar.Add("Grupo actualizado.", Severity.Success);
+            await LoadGroups();
+        }
+    }
+
+    private async Task OnDeleteGroup(QueryGroupDto group)
+    {
+        var parameters = new DialogParameters<ConfirmDialog> { { x => x.Message, $"¿Seguro que deseas eliminar el grupo '{group.Name}'? Las consultas asociadas pasarán a 'Sin grupo'." } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Eliminar Grupo", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await QueryGroupService.DeleteAsync(group.Id);
+            Snackbar.Add("Grupo eliminado.", Severity.Success);
+            await LoadGroups();
+        }
+    }
+}
